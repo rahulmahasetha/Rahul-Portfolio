@@ -7,9 +7,7 @@
     "NODE_ENV": "production"
   },
   "functions": {
-    "backend/**/*.js": {
-      "runtime": "nodejs20.x"
-    }
+    "backend/**/*.js": {}
   },
   "rewrites": [
     {
