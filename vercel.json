@@ -1,0 +1,23 @@
+{
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "env": {
+    "MONGODB_URI": "@mongodb_uri",
+    "ADMIN_EMAIL": "@admin_email",
+    "NODE_ENV": "production",
+    "VITE_API_URL": "@vite_api_url"
+  },
+  "functions": {
+    "backend/**/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "backend/:path*"
+    }
+  ]
+}

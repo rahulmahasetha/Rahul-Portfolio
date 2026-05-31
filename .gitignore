@@ -12,6 +12,22 @@ dist
 dist-ssr
 *.local
 
+# Environment files - NEVER commit secrets!
+.env
+.env.production
+.env.local
+.env.*.local
+
+# Backups
+backup/
+backups/
+migration_report.json
+*.dump
+
+# OS
+.DS_Store
+Thumbs.db
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
