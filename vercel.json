@@ -4,10 +4,7 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "env": {
-    "MONGODB_URI": "@mongodb_uri",
-    "ADMIN_EMAIL": "@admin_email",
-    "NODE_ENV": "production",
-    "VITE_API_URL": "@vite_api_url"
+    "NODE_ENV": "production"
   },
   "functions": {
     "backend/**/*.js": {
