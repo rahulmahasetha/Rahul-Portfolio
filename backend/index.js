@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
+const nodemailer = require('nodemailer');
+const rateLimit = require('express-rate-limit');
 
 const Contact = require('./models/Contact');
 const Certificate = require('./models/Certificate');
@@ -10,6 +12,8 @@ const Project = require('./models/Project');
 const Achievement = require('./models/Achievement');
 const Stat = require('./models/Stat');
 const Timeline = require('./models/Timeline');
+const Experience = require('./models/Experience');
+const Education = require('./models/Education');
 const Nav = require('./models/Nav');
 const Setting = require('./models/Setting');
 const About = require('./models/About');
@@ -50,7 +54,23 @@ mongoose.connect(MONGODB_URI)
   .catch((error) => console.error('MongoDB connection error:', error));
 
 // Routes
-app.post('/api/contact', async (req, res) => {
+// Rate Limiter for contact form
+const contactRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per `window` (here, per 15 minutes)
+  message: { error: 'Too many messages sent from this IP, please try again after 15 minutes' }
+});
+
+// Nodemailer Transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.APP_PASSWORD
+  }
+});
+
+app.post('/api/contact', contactRateLimiter, async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
@@ -59,20 +79,63 @@ app.post('/api/contact', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required.' });
     }
 
-    // Create new contact message
+    // Create new contact message in DB
     const newContact = new Contact({
       name,
       email,
       subject,
       message
     });
-
     await newContact.save();
+
+    // Send email via Nodemailer
+    if (process.env.EMAIL && process.env.APP_PASSWORD) {
+      const mailOptions = {
+        from: process.env.EMAIL,
+        to: process.env.EMAIL,
+        subject: `New Portfolio Contact: ${subject}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px;">
+            <h2 style="color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px;">New Contact Message</h2>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Subject:</strong> ${subject}</p>
+            <h3 style="margin-top: 20px;">Message:</h3>
+            <p style="background: #f9f9f9; padding: 15px; border-left: 4px solid #007bff; white-space: pre-wrap;">${message}</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="color: #666; font-size: 12px;"><strong>Received:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+        `
+      };
+      await transporter.sendMail(mailOptions);
+    }
 
     res.status(201).json({ message: 'Message sent successfully!' });
   } catch (error) {
-    console.error('Error saving contact message:', error);
+    console.error('Error saving or sending contact message:', error);
     res.status(500).json({ error: 'An error occurred while sending the message. Please try again later.' });
+  }
+});
+
+// Get all contact messages
+app.get('/api/contact', async (req, res) => {
+  try {
+    const messages = await Contact.find().sort({ createdAt: -1 });
+    res.json(messages);
+  } catch (error) {
+    console.error('Error fetching contact messages:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Delete a contact message
+app.delete('/api/contact/:id', async (req, res) => {
+  try {
+    await Contact.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Message deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting contact message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
   }
 });
 
@@ -292,7 +355,7 @@ app.post('/api/skills/:id/restore', async (req, res) => {
 // Project routes
 app.get('/api/projects', async (req, res) => {
   try {
-    const projects = await Project.find().sort({ createdAt: -1 });
+    const projects = await Project.find().sort({ order: 1, createdAt: -1 });
     res.json(projects);
   } catch (error) {
     console.error('Error fetching projects:', error);
@@ -302,7 +365,7 @@ app.get('/api/projects', async (req, res) => {
 
 app.post('/api/projects', upload.single('image'), async (req, res) => {
   try {
-    const { title, problem, features, tech, github, demo, description } = req.body;
+    const { title, problem, features, tech, github, demo, description, order } = req.body;
     let imageUrl = req.body.imageUrl || '';
 
     if (req.file) {
@@ -327,7 +390,8 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
       tech: tech ? tech.split(',').map((item) => item.trim()).filter(Boolean) : [],
       github: github || '',
       demo: demo || '',
-      description: description || ''
+      description: description || '',
+      order: order ? parseInt(order, 10) : 0
     });
 
     await newProject.save();
@@ -341,7 +405,7 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
 app.put('/api/projects/:id', upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, problem, features, tech, github, demo, description } = req.body;
+    const { title, problem, features, tech, github, demo, description, order } = req.body;
 
     const project = await Project.findById(id);
     if (!project) {
@@ -371,6 +435,7 @@ app.put('/api/projects/:id', upload.single('image'), async (req, res) => {
     project.github = github || project.github;
     project.demo = demo || project.demo;
     project.description = description || project.description;
+    project.order = order !== undefined ? parseInt(order, 10) : project.order;
 
     await project.save();
     res.json({ message: 'Project updated successfully', project });
@@ -479,6 +544,106 @@ app.delete('/api/timeline/:id', async (req, res) => {
   }
 });
 
+// --- Experience routes ---
+app.get('/api/experience', async (req, res) => {
+  try {
+    const entries = await Experience.find().sort({ startDate: -1 });
+    res.json(entries);
+  } catch (error) {
+    console.error('Error fetching experience:', error);
+    res.status(500).json({ error: 'Failed to fetch experience' });
+  }
+});
+
+app.post('/api/experience', upload.single('image'), async (req, res) => {
+  try {
+    const expData = { ...req.body };
+    if (req.file) {
+      expData.imageUrl = `/uploads/${req.file.filename}`;
+    }
+    const newExp = new Experience(expData);
+    await newExp.save();
+    res.status(201).json({ message: 'Experience added', experience: newExp });
+  } catch (error) {
+    console.error('Error adding experience:', error);
+    res.status(500).json({ error: 'Failed to add experience' });
+  }
+});
+
+app.put('/api/experience/:id', upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const expData = { ...req.body };
+    if (req.file) {
+      expData.imageUrl = `/uploads/${req.file.filename}`;
+    }
+    const exp = await Experience.findByIdAndUpdate(id, expData, { new: true });
+    if (!exp) return res.status(404).json({ error: 'Experience not found' });
+    res.json({ message: 'Experience updated', experience: exp });
+  } catch (error) {
+    console.error('Error updating experience:', error);
+    res.status(500).json({ error: 'Failed to update experience' });
+  }
+});
+
+app.delete('/api/experience/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const exp = await Experience.findByIdAndDelete(id);
+    if (!exp) return res.status(404).json({ error: 'Experience not found' });
+    res.json({ message: 'Experience deleted' });
+  } catch (error) {
+    console.error('Error deleting experience:', error);
+    res.status(500).json({ error: 'Failed to delete experience' });
+  }
+});
+
+// --- Education routes ---
+app.get('/api/education', async (req, res) => {
+  try {
+    const entries = await Education.find().sort({ startYear: -1 });
+    res.json(entries);
+  } catch (error) {
+    console.error('Error fetching education:', error);
+    res.status(500).json({ error: 'Failed to fetch education' });
+  }
+});
+
+app.post('/api/education', async (req, res) => {
+  try {
+    const newEdu = new Education(req.body);
+    await newEdu.save();
+    res.status(201).json({ message: 'Education added', education: newEdu });
+  } catch (error) {
+    console.error('Error adding education:', error);
+    res.status(500).json({ error: 'Failed to add education' });
+  }
+});
+
+app.put('/api/education/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const edu = await Education.findByIdAndUpdate(id, req.body, { new: true });
+    if (!edu) return res.status(404).json({ error: 'Education not found' });
+    res.json({ message: 'Education updated', education: edu });
+  } catch (error) {
+    console.error('Error updating education:', error);
+    res.status(500).json({ error: 'Failed to update education' });
+  }
+});
+
+app.delete('/api/education/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const edu = await Education.findByIdAndDelete(id);
+    if (!edu) return res.status(404).json({ error: 'Education not found' });
+    res.json({ message: 'Education deleted' });
+  } catch (error) {
+    console.error('Error deleting education:', error);
+    res.status(500).json({ error: 'Failed to delete education' });
+  }
+});
+
 // Navigation links
 app.get('/api/nav', async (req, res) => {
   try {
@@ -570,9 +735,14 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/achievements', async (req, res) => {
+app.post('/api/achievements', upload.single('image'), async (req, res) => {
   try {
     const { title, description, icon, color } = req.body;
+    let imageUrl = req.body.imageUrl || '';
+    if (req.file) {
+      imageUrl = `/uploads/${req.file.filename}`;
+    }
+    
     if (!title) {
       return res.status(400).json({ error: 'Title is required.' });
     }
@@ -581,7 +751,8 @@ app.post('/api/achievements', async (req, res) => {
       title,
       description: description || '',
       icon: icon || 'Star',
-      color: color || 'from-blue-500 to-indigo-600'
+      color: color || 'from-blue-500 to-indigo-600',
+      imageUrl
     });
 
     await newAchievement.save();
@@ -591,24 +762,20 @@ app.post('/api/achievements', async (req, res) => {
     res.status(500).json({ error: 'Failed to add achievement' });
   }
 });
-
-app.put('/api/achievements/:id', async (req, res) => {
+app.put('/api/achievements/:id', upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, icon, color } = req.body;
-
-    const achievement = await Achievement.findById(id);
-    if (!achievement) {
+    const updateData = { ...req.body };
+    if (req.file) {
+      updateData.imageUrl = `/uploads/${req.file.filename}`;
+    }
+    
+    const updated = await Achievement.findByIdAndUpdate(id, updateData, { new: true });
+    if (!updated) {
       return res.status(404).json({ error: 'Achievement not found' });
     }
 
-    achievement.title = title || achievement.title;
-    achievement.description = description || achievement.description;
-    achievement.icon = icon || achievement.icon;
-    achievement.color = color || achievement.color;
-
-    await achievement.save();
-    res.json({ message: 'Achievement updated successfully', achievement });
+    res.json({ message: 'Achievement updated successfully', achievement: updated });
   } catch (error) {
     console.error('Error updating achievement:', error);
     res.status(500).json({ error: 'Failed to update achievement' });

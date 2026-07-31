@@ -18,7 +18,7 @@ export default function Navbar({ darkMode, setDarkMode }: { darkMode: boolean, s
   useEffect(() => {
     const fetchNav = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/nav');
+        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/nav');
         if (!res.ok) return;
         const data = await res.json();
         setNavLinks(Array.isArray(data) ? data : []);
@@ -54,7 +54,7 @@ export default function Navbar({ darkMode, setDarkMode }: { darkMode: boolean, s
           </motion.div>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden lg:flex items-center space-x-8">
             <div className="flex space-x-6">
               {navLinks.map((link, index) => (
                 <motion.a
@@ -82,7 +82,7 @@ export default function Navbar({ darkMode, setDarkMode }: { darkMode: boolean, s
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center space-x-4">
+          <div className="lg:hidden flex items-center space-x-4">
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
@@ -102,7 +102,7 @@ export default function Navbar({ darkMode, setDarkMode }: { darkMode: boolean, s
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          className="md:hidden bg-white dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-gray-800"
+          className="lg:hidden bg-white dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-gray-800"
         >
           <div className="px-4 pt-2 pb-6 space-y-2 flex flex-col">
             {navLinks.map((link) => (

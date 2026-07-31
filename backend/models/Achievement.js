@@ -4,7 +4,8 @@ const achievementSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, default: '' },
   icon: { type: String, default: 'Star' },
-  color: { type: String, default: 'from-blue-500 to-indigo-600' }
+  color: { type: String, default: 'from-blue-500 to-indigo-600' },
+  imageUrl: { type: String, default: '' }
 }, {
   timestamps: true
 });

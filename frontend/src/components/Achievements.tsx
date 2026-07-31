@@ -8,14 +8,15 @@ interface AchievementItem {
   description: string;
   icon: string;
   color: string;
+  imageUrl?: string;
 }
 
 const iconMap: Record<string, JSX.Element> = {
-  Target: <Target className="w-8 h-8 text-white" />,
-  Star: <Star className="w-8 h-8 text-white" />,
-  Award: <Award className="w-8 h-8 text-white" />,
-  Zap: <Zap className="w-8 h-8 text-white" />,
-  Default: <Circle className="w-8 h-8 text-white" />
+  Target: <Target className="w-5 h-5 text-gray-500" />,
+  Star: <Star className="w-5 h-5 text-gray-500" />,
+  Award: <Award className="w-5 h-5 text-gray-500" />,
+  Zap: <Zap className="w-5 h-5 text-gray-500" />,
+  Default: <Circle className="w-5 h-5 text-gray-500" />
 };
 
 const initialAchievements: AchievementItem[] = [
@@ -55,7 +56,7 @@ export default function Achievements() {
   useEffect(() => {
     const fetchAchievements = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/achievements');
+        const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/achievements');
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
           setAchievements(data);
@@ -69,43 +70,45 @@ export default function Achievements() {
   }, []);
 
   return (
-    <section id="achievements" className="py-20 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="achievements" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+          className="mb-16"
         >
-          <h2 className="text-3xl md:text-5xl font-bold mb-4">
-            Honors & <span className="text-gradient">Achievements</span>
-          </h2>
-          <div className="w-24 h-1 bg-gradient-to-r from-primary to-secondary mx-auto rounded-full"></div>
+          <h6 className="text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
+            Honors & Achievements
+          </h6>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="space-y-0">
           {achievements.map((item, index) => (
-            <motion.div
-              key={item._id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ y: -10 }}
-              className="glass p-8 rounded-3xl relative overflow-hidden group"
-            >
-              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${item.color} rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-300`}></div>
-
-              <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg mb-6 transform group-hover:rotate-12 transition-transform duration-300`}>
+            <div key={item._id ?? index} className="flex flex-col md:flex-row border-b border-gray-200 dark:border-gray-800 py-8 first:pt-0 last:border-0">
+              <div className="md:w-1/4 mb-4 md:mb-0 pr-4 flex flex-row items-center md:items-start gap-2">
                 {iconMap[item.icon] ?? iconMap.Default}
+                <span className="text-xs font-mono tracking-widest text-gray-500 uppercase mt-0.5">
+                  HONOR
+                </span>
               </div>
-
-              <h3 className="text-xl font-bold mb-3 text-gray-900 dark:text-white">{item.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed relative z-10">
-                {item.description}
-              </p>
-            </motion.div>
+              <div className="md:w-3/4">
+                <h3 className="font-semibold text-xl md:text-2xl text-gray-900 dark:text-gray-100 mb-2">
+                  {item.title}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 text-base md:text-lg leading-relaxed">
+                  {item.description}
+                </p>
+                {item.imageUrl && (
+                  <div className="mt-4">
+                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${item.imageUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-800 bg-transparent px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors hover:bg-gray-100 dark:hover:bg-gray-900">
+                      View Certificate / Image
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
           ))}
         </div>
       </div>

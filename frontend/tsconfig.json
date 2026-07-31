@@ -1,0 +1,13 @@
+{
+  "files": [
+    ".vscode/ts-hover-prettify.d.ts"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
+}

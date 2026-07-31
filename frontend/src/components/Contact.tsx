@@ -6,19 +6,25 @@ import { FaGithub, FaLinkedin, FaTwitter } from 'react-icons/fa';
 export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
+    setErrorMsg('');
+    setSuccessMsg('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+    setErrorMsg('');
+    setSuccessMsg('');
+
     try {
-      const response = await fetch('http://localhost:5000/api/contact', {
+      const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/contact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -26,16 +32,22 @@ export default function Contact() {
         body: JSON.stringify(formData),
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         setSubmitted(true);
+        setSuccessMsg(data.message || 'Message sent successfully!');
         setFormData({ name: '', email: '', subject: '', message: '' });
-        setTimeout(() => setSubmitted(false), 3000);
+        setTimeout(() => {
+          setSubmitted(false);
+          setSuccessMsg('');
+        }, 5000);
       } else {
-        alert('Failed to send message. Please try again.');
+        setErrorMsg(data.error || 'Failed to send message. Please try again.');
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('An error occurred. Make sure the backend server is running.');
+      setErrorMsg('An error occurred. Make sure the backend server is running.');
     } finally {
       setIsSubmitting(false);
     }
@@ -44,7 +56,7 @@ export default function Contact() {
   return (
     <section id="contact" className="py-20 relative bg-gray-50 dark:bg-black/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -59,7 +71,7 @@ export default function Contact() {
 
         <div className="grid md:grid-cols-5 gap-12">
           {/* Contact Info */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -68,7 +80,7 @@ export default function Contact() {
           >
             <div className="glass p-8 rounded-3xl">
               <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Contact Information</h3>
-              
+
               <div className="space-y-6">
                 <a href="mailto:rahulmahaseth700@gmail.com" className="flex items-center group">
                   <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300">
@@ -79,7 +91,7 @@ export default function Contact() {
                     <p className="text-gray-900 dark:text-white font-semibold group-hover:text-primary transition-colors">rahulmahaseth700@gmail.com</p>
                   </div>
                 </a>
-                
+
                 <div className="flex items-center group">
                   <div className="w-12 h-12 rounded-full bg-secondary/10 text-secondary flex items-center justify-center group-hover:bg-secondary group-hover:text-white transition-all duration-300">
                     <MapPin size={24} />
@@ -99,7 +111,7 @@ export default function Contact() {
                     { icon: <FaLinkedin size={20} />, href: "https://www.linkedin.com/in/rahul-mahaseth-37651b291", label: "LinkedIn" },
                     { icon: <FaTwitter size={20} />, href: "#", label: "Twitter" }
                   ].map((social, index) => (
-                    <a 
+                    <a
                       key={index}
                       href={social.href}
                       aria-label={social.label}
@@ -114,7 +126,7 @@ export default function Contact() {
           </motion.div>
 
           {/* Contact Form */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -123,38 +135,48 @@ export default function Contact() {
           >
             <div className="glass p-8 md:p-10 rounded-3xl">
               <form onSubmit={handleSubmit} className="space-y-6">
+                {errorMsg && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+                    {errorMsg}
+                  </div>
+                )}
+                {successMsg && (
+                  <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 text-sm">
+                    {successMsg}
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your Name</label>
-                    <input 
-                      type="text" 
-                      id="name" 
+                    <input
+                      type="text"
+                      id="name"
                       required
                       value={formData.name}
                       onChange={handleChange}
                       className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-black/50 border border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-gray-900 dark:text-white"
-                      placeholder="John Doe"
+                      placeholder="Full Name"
                     />
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your Email</label>
-                    <input 
-                      type="email" 
-                      id="email" 
+                    <input
+                      type="email"
+                      id="email"
                       required
                       value={formData.email}
                       onChange={handleChange}
                       className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-black/50 border border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-gray-900 dark:text-white"
-                      placeholder="john@example.com"
+                      placeholder="Your Email"
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <label htmlFor="subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Subject</label>
-                  <input 
-                    type="text" 
-                    id="subject" 
+                  <input
+                    type="text"
+                    id="subject"
                     required
                     value={formData.subject}
                     onChange={handleChange}
@@ -165,8 +187,8 @@ export default function Contact() {
 
                 <div>
                   <label htmlFor="message" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
-                  <textarea 
-                    id="message" 
+                  <textarea
+                    id="message"
                     rows={5}
                     required
                     value={formData.message}
@@ -176,10 +198,10 @@ export default function Contact() {
                   ></textarea>
                 </div>
 
-                <motion.button 
+                <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  type="submit" 
+                  type="submit"
                   disabled={isSubmitting}
                   className="w-full py-4 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors shadow-lg shadow-primary/30 disabled:opacity-70 disabled:cursor-not-allowed"
                 >

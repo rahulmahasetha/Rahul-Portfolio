@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, X, Eye, Edit3, Trash2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Upload, X, Eye, Edit3, Trash2, ArrowLeft, ArrowRight, Lock, Shield, ShieldCheck, EyeOff } from 'lucide-react';
 
 interface CertificateFormData {
   title: string;
@@ -44,6 +44,15 @@ interface SkillRecord {
   updatedAt: string;
 }
 
+interface ContactRecord {
+  _id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+}
+
 interface ProjectFormData {
   title: string;
   imageUrl: string;
@@ -53,6 +62,7 @@ interface ProjectFormData {
   github: string;
   demo: string;
   description: string;
+  order: number;
 }
 
 interface ProjectRecord {
@@ -65,6 +75,7 @@ interface ProjectRecord {
   github: string;
   demo: string;
   description: string;
+  order: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +85,7 @@ interface AchievementFormData {
   description: string;
   icon: string;
   color: string;
+  imageUrl?: string;
 }
 
 interface AchievementRecord extends AchievementFormData {
@@ -105,17 +117,31 @@ interface NavRecord extends NavFormData {
   _id: string;
 }
 
-interface TimelineFormData {
-  date: string;
-  title: string;
-  location: string;
+
+interface ExperienceFormData {
+  projectName: string;
+  role: string;
+  organization: string;
   description: string;
-  type: string;
-  iconUrl: string;
-  order: number;
+  startDate: string;
+  endDate: string;
+  imageUrl?: string;
 }
 
-interface TimelineRecord extends TimelineFormData {
+interface ExperienceRecord extends ExperienceFormData {
+  _id: string;
+}
+
+interface EducationFormData {
+  collegeName: string;
+  degreeName: string;
+  location: string;
+  startYear: string;
+  passingOutYear: string;
+  percentage: string;
+}
+
+interface EducationRecord extends EducationFormData {
   _id: string;
 }
 
@@ -131,14 +157,18 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [achievements, setAchievements] = useState<AchievementRecord[]>([]);
   const [aboutItems, setAboutItems] = useState<AboutRecord[]>([]);
   const [resumeRecord, setResumeRecord] = useState<ResumeRecord | null>(null);
-  const [timelineItems, setTimelineItems] = useState<TimelineRecord[]>([]);
-  const [activeSection, setActiveSection] = useState<'certificates' | 'skills' | 'projects' | 'achievements' | 'about' | 'resume' | 'timeline'>('certificates');
+  const [experienceItems, setExperienceItems] = useState<ExperienceRecord[]>([]);
+  const [educationItems, setEducationItems] = useState<EducationRecord[]>([]);
+  const [contacts, setContacts] = useState<ContactRecord[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [activeSection, setActiveSection] = useState<'certificates' | 'skills' | 'projects' | 'achievements' | 'about' | 'resume' | 'experience' | 'education' | 'contacts'>('certificates');
   const [skillViewMode, setSkillViewMode] = useState<'table' | 'card'>('table');
   const [showDeletedSkills, setShowDeletedSkills] = useState(false);
   const [skillDeleteTarget, setSkillDeleteTarget] = useState<SkillRecord | null>(null);
@@ -171,16 +201,21 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     tech: '',
     github: '',
     demo: '',
-    description: ''
+    description: '',
+    order: 0
   });
   const [navForm, setNavForm] = useState<NavFormData>({
     name: '', href: '', order: 100, visible: true
   });
-  const [timelineForm, setTimelineForm] = useState<TimelineFormData>({
-    date: '', title: '', location: '', description: '', type: 'work', iconUrl: '', order: 100
+  const [experienceForm, setExperienceForm] = useState<ExperienceFormData>({
+    projectName: '', role: '', organization: '', description: '', startDate: '', endDate: 'Present'
+  });
+  const [educationForm, setEducationForm] = useState<EducationFormData>({
+    collegeName: '', degreeName: '', location: '', startYear: '', passingOutYear: '', percentage: ''
   });
   const [navEditId, setNavEditId] = useState<string | null>(null);
-  const [timelineEditId, setTimelineEditId] = useState<string | null>(null);
+  const [experienceEditId, setExperienceEditId] = useState<string | null>(null);
+  const [educationEditId, setEducationEditId] = useState<string | null>(null);
   const [achievementForm, setAchievementForm] = useState<AchievementFormData>({
     title: '',
     description: '',
@@ -208,7 +243,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
   // About section state
   const [aboutForm, setAboutForm] = useState<AboutFormData>({ title: '', content: '', order: 0 });
 
-  const ADMIN_PASSWORD = 'adminRahul@123';
+  const ADMIN_PASSWORD = 'Raj Mahaseth@123';
   const pageSize = 6;
 
   const totalPages = Math.max(1, Math.ceil(certificates.length / pageSize));
@@ -225,13 +260,39 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
       fetchAchievements();
       fetchAboutItems();
       fetchResume();
-      fetchTimelineItems();
+      fetchExperienceItems();
+      fetchEducationItems();
+      fetchContacts();
     }
   }, [isAuthenticated]);
 
+  const fetchContacts = async () => {
+    try {
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/contact');
+      if (!res.ok) return;
+      setContacts(await res.json());
+    } catch (err) { console.error('Failed to fetch contacts', err); }
+  };
+
+  const deleteContact = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/contact/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      setContacts((prev) => prev.filter(c => c._id !== id));
+      setMessage({ type: 'success', text: 'Contact message deleted successfully.' });
+    } catch (err) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'Could not delete message. Please try again.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchResume = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/resume');
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/resume');
       if (!res.ok) return;
       setResumeRecord(await res.json());
     } catch (err) { console.error(err); }
@@ -239,17 +300,25 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
 
-  const fetchTimelineItems = async () => {
+  const fetchExperienceItems = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/timeline');
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/experience');
       if (!res.ok) return;
-      setTimelineItems(await res.json());
+      setExperienceItems(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchEducationItems = async () => {
+    try {
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/education');
+      if (!res.ok) return;
+      setEducationItems(await res.json());
     } catch (err) { console.error(err); }
   };
 
   const fetchAboutItems = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/about');
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/about');
       if (!res.ok) return;
       const data = await res.json();
       setAboutItems(data);
@@ -263,7 +332,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setLoading(true);
     setMessage(null);
     try {
-      const url = aboutEditId ? `http://localhost:5000/api/about/${aboutEditId}` : 'http://localhost:5000/api/about';
+      const url = aboutEditId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/about/${aboutEditId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/about';
       const method = aboutEditId ? 'PUT' : 'POST';
       const payload = { title: aboutForm.title, content: aboutForm.content, order: aboutForm.order };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -282,7 +351,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
   const deleteAbout = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this about item?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/about/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/about/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       setMessage({ type: 'success', text: 'About item deleted.' });
       fetchAboutItems();
@@ -311,7 +380,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     try {
       const formData = new FormData();
       formData.append('resume', resumeFile);
-      const res = await fetch('http://localhost:5000/api/resume', { method: 'POST', body: formData });
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/resume', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Upload failed');
       setMessage({ type: 'success', text: 'Resume uploaded successfully.' });
       setResumeFile(null);
@@ -327,7 +396,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
   const deleteResume = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete the resume?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/resume/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/resume/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       setMessage({ type: 'success', text: 'Resume deleted.' });
       setResumeRecord(null);
@@ -337,58 +406,118 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     }
   };
 
-  const submitTimeline = async (e: React.FormEvent) => {
+  // --- Experience CRUD ---
+  const submitExperience = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage(null);
     try {
-      const url = timelineEditId ? `http://localhost:5000/api/timeline/${timelineEditId}` : 'http://localhost:5000/api/timeline';
-      const method = timelineEditId ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(timelineForm) });
-      if (!res.ok) throw new Error('Save failed');
-      setMessage({ type: 'success', text: timelineEditId ? 'Timeline entry updated.' : 'Timeline entry created.' });
-      resetTimelineForm();
-      fetchTimelineItems();
+      const url = experienceEditId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/experience/${experienceEditId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/experience';
+      const method = experienceEditId ? 'PUT' : 'POST';
+      
+      const formData = new FormData();
+      formData.append('projectName', experienceForm.projectName);
+      formData.append('role', experienceForm.role);
+      formData.append('organization', experienceForm.organization);
+      formData.append('description', experienceForm.description);
+      formData.append('startDate', experienceForm.startDate);
+      formData.append('endDate', experienceForm.endDate);
+      if (experienceForm.imageUrl) formData.append('imageUrl', experienceForm.imageUrl);
+      if (imageFile) formData.append('image', imageFile);
+
+      const res = await fetch(url, { method, body: formData });
+      if (res.ok) {
+        setMessage({ type: 'success', text: experienceEditId ? 'Experience updated.' : 'Experience created.' });
+        resetExperienceForm();
+        setImageFile(null);
+        fetchExperienceItems();
+      } else throw new Error();
     } catch (err) {
-      console.error('Failed to save timeline entry', err);
-      setMessage({ type: 'error', text: 'Failed to save timeline entry.' });
-    } finally {
-      setLoading(false);
+      console.error(err);
+      setMessage({ type: 'error', text: 'Failed to save experience.' });
+    } finally { setLoading(false); }
+  };
+
+  const deleteExperience = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this experience entry?')) return;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/experience/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Experience deleted.' });
+        fetchExperienceItems();
+      } else throw new Error();
+    } catch (err) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'Failed to delete experience.' });
     }
   };
 
-  const deleteTimeline = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this timeline entry?')) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/timeline/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
-      setMessage({ type: 'success', text: 'Timeline entry deleted.' });
-      fetchTimelineItems();
-    } catch (err) {
-      console.error('Failed to delete timeline entry', err);
-      setMessage({ type: 'error', text: 'Failed to delete timeline entry.' });
-    }
-  };
-
-  const editTimeline = (item: TimelineRecord) => {
-    setTimelineEditId(item._id);
-    setTimelineForm({ 
-      date: item.date, title: item.title, location: item.location, 
-      description: item.description, type: item.type, iconUrl: item.iconUrl, order: item.order 
+  const editExperience = (item: ExperienceRecord) => {
+    setExperienceEditId(item._id);
+    setExperienceForm({ 
+      projectName: item.projectName, role: item.role, organization: item.organization, description: item.description,      startDate: item.startDate,
+      endDate: item.endDate,
+      imageUrl: item.imageUrl || ''
     });
-    setActiveSection('timeline');
+    setActiveSection('experience');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const resetTimelineForm = () => {
-    setTimelineForm({ date: '', title: '', location: '', description: '', type: 'work', iconUrl: '', order: 100 });
-    setTimelineEditId(null);
+  const resetExperienceForm = () => {
+    setExperienceForm({ projectName: '', role: '', organization: '', description: '', startDate: '', endDate: 'Present', imageUrl: '' });
+    setExperienceEditId(null);
+  };
+
+  // --- Education CRUD ---
+  const submitEducation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const url = educationEditId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/education/${educationEditId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/education';
+      const method = educationEditId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(educationForm) });
+      if (res.ok) {
+        setMessage({ type: 'success', text: educationEditId ? 'Education updated.' : 'Education created.' });
+        resetEducationForm();
+        fetchEducationItems();
+      } else throw new Error();
+    } catch (err) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'Failed to save education.' });
+    } finally { setLoading(false); }
+  };
+
+  const deleteEducation = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this education entry?')) return;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/education/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Education deleted.' });
+        fetchEducationItems();
+      } else throw new Error();
+    } catch (err) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'Failed to delete education.' });
+    }
+  };
+
+  const editEducation = (item: EducationRecord) => {
+    setEducationEditId(item._id);
+    setEducationForm({ 
+      collegeName: item.collegeName, degreeName: item.degreeName, location: item.location, startYear: item.startYear, passingOutYear: item.passingOutYear, percentage: item.percentage
+    });
+    setActiveSection('education');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetEducationForm = () => {
+    setEducationForm({ collegeName: '', degreeName: '', location: '', startYear: '', passingOutYear: '', percentage: '' });
+    setEducationEditId(null);
   };
 
 
   useEffect(() => {
     const path = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
-    if (path === '/adminportal' || path === '/adminportal/' || isAdminPath) {
+    if (path === '/admin-rahul' || path === '/admin-rahul/' || isAdminPath) {
       setIsOpen(true);
     }
   }, [isAdminPath]);
@@ -454,7 +583,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/certificates');
+      const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/certificates');
       const data = await response.json();
       setCertificates(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -470,7 +599,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/skills${includeDeleted ? '?includeDeleted=true' : ''}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/skills${includeDeleted ? '?includeDeleted=true' : ''}`);
       const data = await response.json();
       const skillsArray = Array.isArray(data) ? data : [];
       setSkills(skillsArray.sort((a: SkillRecord, b: SkillRecord) => a.displayOrder - b.displayOrder || a.category.localeCompare(b.category) || a.name.localeCompare(b.name)));
@@ -487,7 +616,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/projects');
+      const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/projects');
       const data = await response.json();
       setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -503,7 +632,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/achievements');
+      const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/achievements');
       const data = await response.json();
       setAchievements(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -523,7 +652,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
   };
 
   const resetProjectForm = () => {
-    setProjectForm({ title: '', imageUrl: '', problem: '', features: [''], tech: '', github: '', demo: '', description: '' });
+    setProjectForm({ title: '', imageUrl: '', problem: '', features: [''], tech: '', github: '', demo: '', description: '', order: 0 });
     setProjectEditId(null);
     setSelectedProject(null);
     setImageFile(null);
@@ -602,7 +731,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
       if (imageFile) payload.append('image', imageFile);
       if (pdfFile) payload.append('pdf', pdfFile);
 
-      const url = editId ? `http://localhost:5000/api/certificates/${editId}` : 'http://localhost:5000/api/certificates';
+      const url = editId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/certificates/${editId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/certificates';
       const method = editId ? 'PUT' : 'POST';
       const response = await fetch(url, { method, body: payload });
 
@@ -637,7 +766,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const url = skillEditId ? `http://localhost:5000/api/skills/${skillEditId}` : 'http://localhost:5000/api/skills';
+      const url = skillEditId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/skills/${skillEditId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/skills';
       const method = skillEditId ? 'PUT' : 'POST';
       const payload = new FormData();
       const selectedCategory = skillForm.category === 'Custom' ? skillForm.customCategory : skillForm.category;
@@ -693,12 +822,13 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
       payload.append('github', projectForm.github);
       payload.append('demo', projectForm.demo);
       payload.append('description', projectForm.description);
+      payload.append('order', projectForm.order.toString());
 
       if (imageFile) {
         payload.append('image', imageFile);
       }
 
-      const url = projectEditId ? `http://localhost:5000/api/projects/${projectEditId}` : 'http://localhost:5000/api/projects';
+      const url = projectEditId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/projects/${projectEditId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/projects';
       const method = projectEditId ? 'PUT' : 'POST';
       const response = await fetch(url, { method, body: payload });
 
@@ -729,12 +859,20 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const url = achievementEditId ? `http://localhost:5000/api/achievements/${achievementEditId}` : 'http://localhost:5000/api/achievements';
+      const url = achievementEditId ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/achievements/${achievementEditId}` : (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/achievements';
       const method = achievementEditId ? 'PUT' : 'POST';
+      
+      const formData = new FormData();
+      formData.append('title', achievementForm.title);
+      formData.append('description', achievementForm.description);
+      formData.append('icon', achievementForm.icon);
+      formData.append('color', achievementForm.color);
+      if (achievementForm.imageUrl) formData.append('imageUrl', achievementForm.imageUrl);
+      if (imageFile) formData.append('image', imageFile);
+
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(achievementForm)
+        body: formData
       });
 
       if (!response.ok) throw new Error('Achievement save failed');
@@ -750,6 +888,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
 
       setMessage({ type: 'success', text: achievementEditId ? 'Achievement updated successfully.' : 'Achievement added successfully.' });
       resetAchievementForm();
+      setImageFile(null);
     } catch (error) {
       console.error('Failed to save achievement', error);
       setMessage({ type: 'error', text: 'Could not save achievement. Please try again.' });
@@ -786,7 +925,8 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
       tech: project.tech.join(', '),
       github: project.github,
       demo: project.demo,
-      description: project.description
+      description: project.description,
+      order: project.order ?? 0
     });
     setSelectedProject(null);
     setImageFile(null);
@@ -799,7 +939,8 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
       title: achievement.title,
       description: achievement.description,
       icon: achievement.icon || 'Star',
-      color: achievement.color || 'from-blue-500 to-indigo-600'
+      color: achievement.color || 'from-blue-500 to-indigo-600',
+      imageUrl: achievement.imageUrl || ''
     });
     setSelectedAchievement(null);
     setMessage(null);
@@ -816,7 +957,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/skills/${skillDeleteTarget._id}`, { method: 'DELETE' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/skills/${skillDeleteTarget._id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
       setSkills((prev) => prev.filter((item) => item._id !== skillDeleteTarget._id));
       setMessage({ type: 'success', text: 'Skill deleted successfully.' });
@@ -834,7 +975,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/skills/${skill._id}/restore`, { method: 'POST' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/skills/${skill._id}/restore`, { method: 'POST' });
       if (!response.ok) throw new Error('Restore failed');
       await fetchSkills(showDeletedSkills);
       setMessage({ type: 'success', text: 'Skill restored successfully.' });
@@ -852,7 +993,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/projects/${project._id}`, { method: 'DELETE' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/projects/${project._id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
       setProjects((prev) => prev.filter((item) => item._id !== project._id));
       setMessage({ type: 'success', text: 'Project deleted successfully.' });
@@ -870,7 +1011,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/achievements/${achievement._id}`, { method: 'DELETE' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/achievements/${achievement._id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
       setAchievements((prev) => prev.filter((item) => item._id !== achievement._id));
       setMessage({ type: 'success', text: 'Achievement deleted successfully.' });
@@ -929,7 +1070,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/certificates/${deleteTarget._id}`, { method: 'DELETE' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/certificates/${deleteTarget._id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
 
       setCertificates((prev) => prev.filter((item) => item._id !== deleteTarget._id));
@@ -962,24 +1103,12 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
 
   return (
     <>
-      {!isAdminPath && (
-        <motion.button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-8 right-8 z-40 bg-gradient-to-r from-primary to-secondary text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          title="Admin Panel"
-        >
-          <Upload className="w-6 h-6" />
-        </motion.button>
-      )}
-
       {(isOpen || isAdminPath) && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className={`${isAdminPath ? 'bg-gray-950 p-4 min-h-screen' : 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4'}`}
+          className={`${isAdminPath ? (!isAuthenticated ? 'bg-gray-50 p-4 min-h-screen flex items-center justify-center' : 'bg-gray-950 p-4 min-h-screen') : 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4'}`}
           onClick={isAdminPath ? undefined : () => !isAuthenticated && setIsOpen(false)}
         >
           <motion.div
@@ -987,73 +1116,99 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             onClick={(event) => event.stopPropagation()}
-            className={`${isAdminPath ? 'min-h-screen' : 'w-full max-w-6xl max-h-[90vh]'} bg-gray-900 rounded-2xl w-full overflow-hidden shadow-2xl border border-gray-800`}
+            className={`${isAdminPath ? (!isAuthenticated ? 'w-full max-w-4xl' : 'min-h-screen w-full') : `w-full max-h-[90vh] ${!isAuthenticated ? 'max-w-4xl' : 'max-w-6xl'}`} ${!isAuthenticated ? 'bg-white shadow-xl rounded-xl' : 'bg-gray-900 shadow-2xl border border-gray-800 rounded-2xl'} overflow-hidden flex flex-col`}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 p-6 border-b border-gray-800 bg-gray-900">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Admin Portal</h2>
-                <p className="text-sm text-gray-400">Manage certificates with stable CRUD actions.</p>
+            <div className={`sticky top-0 z-10 flex items-center justify-between gap-4 p-6 ${!isAuthenticated ? 'border-b border-gray-100 bg-white' : 'border-b border-gray-800 bg-gray-900'}`}>
+              <div className="flex items-center gap-4">
+                {!isAuthenticated && (
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full border-2 border-primary bg-indigo-50 text-primary">
+                    <Shield className="w-6 h-6" />
+                  </div>
+                )}
+                <div>
+                  <h2 className={`text-2xl font-bold ${!isAuthenticated ? 'text-gray-900' : 'text-white'}`}>Admin Portal</h2>
+                  <p className={`text-sm ${!isAuthenticated ? 'text-gray-500' : 'text-gray-400'}`}>Manage certificates with stable CRUD actions.</p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                {isAuthenticated && (
-                  <motion.button
-                    onClick={closeAdminPanel}
-                    whileHover={{ scale: 1.05 }}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white transition-all hover:border-primary"
-                  >
-                    Close
-                  </motion.button>
-                )}
                 <motion.button
                   onClick={() => setIsOpen(false)}
                   whileHover={{ scale: 1.1 }}
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className={`${!isAuthenticated ? 'flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors' : 'text-gray-400 hover:text-white transition-colors'}`}
                   aria-label="Close panel"
                 >
-                  <X className="w-6 h-6" />
+                  <X className={`${!isAuthenticated ? 'w-5 h-5' : 'w-6 h-6'}`} />
                 </motion.button>
               </div>
             </div>
 
-            <div className="overflow-y-auto px-6 py-6 h-full w-full flex flex-col gap-6">
+            <div className={`overflow-y-auto ${!isAuthenticated ? 'px-6 py-16' : 'px-6 py-6'} h-full w-full flex flex-col ${!isAuthenticated ? 'items-center justify-center' : 'gap-6'}`}>
               {!isAuthenticated ? (
-                <motion.form
-                  onSubmit={handlePasswordSubmit}
-                  className="space-y-6 rounded-3xl border border-gray-800 bg-gray-950 p-6 shadow-lg"
-                >
-                  <div className="space-y-2">
-                    <label className="block text-sm font-semibold text-gray-300">Admin Password</label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Enter admin password"
-                      className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-all"
-                      required
-                    />
+                <div className="w-full max-w-2xl mx-auto flex flex-col items-center">
+                  <div className="mb-6 relative flex items-center justify-center w-20 h-20 bg-indigo-50 rounded-full">
+                    <Lock className="w-8 h-8 text-primary" />
+                    <div className="absolute w-1 h-1 bg-indigo-200 rounded-full -left-6"></div>
+                    <div className="absolute w-1 h-1 bg-indigo-200 rounded-full -right-6"></div>
                   </div>
-
-                  {message && (
-                    <div
-                      className={`rounded-2xl p-4 text-sm ${
-                        message.type === 'error'
-                          ? 'bg-red-500/15 border border-red-500 text-red-300'
-                          : 'bg-emerald-500/15 border border-emerald-500 text-emerald-300'
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110"
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Admin Authentication</h3>
+                  <p className="text-gray-500 mb-10 text-center">Enter your admin password to access the portal</p>
+                  
+                  <motion.form
+                    onSubmit={handlePasswordSubmit}
+                    className="w-full max-w-xl mx-auto space-y-6"
                   >
-                    Authenticate
-                  </button>
-                </motion.form>
+                    <div className="space-y-2 text-left">
+                      <label className="block text-sm font-semibold text-gray-900">Admin Password</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <Lock className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="Enter admin password"
+                          className="w-full rounded-xl border border-primary/40 bg-white pl-12 pr-12 py-3.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                          required
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                          {showPassword ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {message && (
+                      <div
+                        className={`rounded-xl p-4 text-sm flex justify-center ${
+                          message.type === 'error'
+                            ? 'bg-red-50 text-red-600 border border-red-100'
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        }`}
+                      >
+                        {message.text}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full rounded-xl bg-gradient-to-r from-primary to-secondary px-5 py-3.5 text-base font-semibold text-white transition-all hover:brightness-110 flex items-center justify-center gap-2 shadow-md shadow-primary/20"
+                    >
+                      <ShieldCheck className="w-5 h-5" />
+                      Authenticate
+                    </button>
+                    
+                    <div className="pt-6 flex items-center justify-center gap-1.5 text-sm text-gray-500">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Secure access &bull; Authorized personnel only</span>
+                    </div>
+                  </motion.form>
+                </div>
               ) : (
-                <>
+                <div className="w-full flex flex-col gap-6">
                   <div className="mb-5 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
@@ -1061,7 +1216,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
                         <p className="text-sm text-gray-400">Manage Certificates, Skills, Projects and Honors & Achievements.</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {['certificates', 'skills', 'projects', 'achievements', 'about', 'resume', 'timeline'].map((section) => (
+                        {['certificates', 'skills', 'projects', 'achievements', 'about', 'resume', 'experience', 'education', 'contacts'].map((section) => (
                           <button
                             key={section}
                             type="button"
@@ -1730,6 +1885,17 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
                             />
                           </label>
                           <label className="block text-sm text-gray-300">
+                            <span className="mb-2 block font-medium">Order (1 shows first)</span>
+                            <input
+                              type="number"
+                              name="order"
+                              value={projectForm.order}
+                              onChange={handleProjectInputChange}
+                              placeholder="Display order"
+                              className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all"
+                            />
+                          </label>
+                          <label className="block text-sm text-gray-300">
                             <span className="mb-2 block font-medium">Image URL</span>
                             <input
                               type="text"
@@ -2002,6 +2168,10 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
                             className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all resize-none"
                           />
                         </label>
+                        <label className="block text-sm text-gray-300">
+                          <span className="mb-2 block font-medium">Certificate / Image</span>
+                          <input type="file" onChange={(e) => { if (e.target.files && e.target.files[0]) setImageFile(e.target.files[0]); }} className="w-full text-gray-400 file:mr-4 file:rounded-full file:border-0 file:bg-gray-800 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-700 focus:outline-none" />
+                        </label>
                         <div className="flex flex-col gap-3 sm:flex-row">
                           <button
                             type="submit"
@@ -2172,7 +2342,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
                             <h4 className="text-xl font-semibold text-white mb-2">{resumeRecord.originalName}</h4>
                             <p className="text-sm text-gray-400 mb-6">Uploaded: {new Date(resumeRecord.createdAt).toLocaleDateString()}</p>
                             <div className="flex gap-4">
-                              <a href={`http://localhost:5000${resumeRecord.url}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-700">
+                              <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resumeRecord.url}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-700">
                                 <Eye className="w-4 h-4" /> View PDF
                               </a>
                               <button onClick={() => deleteResume(resumeRecord._id)} className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500">
@@ -2208,63 +2378,177 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
                     </div>
                   )}
 
-                  {activeSection === 'timeline' && (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.45fr_1fr] w-full">
-                      <section className="rounded-3xl border border-gray-800 bg-gray-950 p-5 shadow-lg flex flex-col">
-                        <div className="mb-5 flex items-center justify-between gap-4">
-                          <div>
-                            <h3 className="text-lg font-semibold text-white">Timeline</h3>
-                            <p className="text-sm text-gray-400">Manage Experience & Education.</p>
-                          </div>
+                  {activeSection === 'experience' && (
+                    <div className="space-y-8">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-white">Experience Management</h2>
+                          <p className="text-gray-400">Add or edit your work experience.</p>
                         </div>
-                        <div className="overflow-hidden rounded-3xl border border-gray-800 bg-gray-900">
-                          <table className="min-w-full table-fixed border-separate border-spacing-0 text-left text-sm text-gray-300">
-                            <thead className="bg-gray-950 text-xs uppercase text-gray-500">
-                              <tr>
-                                <th className="px-4 py-3">Title</th>
-                                <th className="px-4 py-3">Date</th>
-                                <th className="px-4 py-3">Type</th>
-                                <th className="px-4 py-3">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800">
-                              {timelineItems.map((item) => (
-                                <tr key={item._id} className="hover:bg-gray-800">
-                                  <td className="px-4 py-3 truncate max-w-[150px]">{item.title}</td>
-                                  <td className="px-4 py-3 whitespace-nowrap">{item.date}</td>
-                                  <td className="px-4 py-3 capitalize">{item.type}</td>
-                                  <td className="px-4 py-3 flex gap-2">
-                                    <button type="button" onClick={() => editTimeline(item)} className="text-gray-400 hover:text-white"><Edit3 className="w-4 h-4"/></button>
-                                    <button type="button" onClick={() => deleteTimeline(item._id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-4 h-4"/></button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                      </div>
+                      
+                      <section className="rounded-2xl border border-gray-800 bg-black/50 p-6">
+                        <h3 className="text-lg font-semibold text-white mb-4">Current Experience</h3>
+                        <div className="grid gap-4">
+                          {experienceItems.map((item) => (
+                            <div key={item._id} className="flex items-center justify-between rounded-xl bg-gray-900/50 p-4 border border-gray-800">
+                              <div>
+                                <h4 className="font-semibold text-white">{item.role} @ {item.organization}</h4>
+                                <p className="text-sm text-gray-400">{item.projectName} | {item.startDate} - {item.endDate}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => editExperience(item)} className="text-gray-400 hover:text-white"><Edit3 className="w-4 h-4"/></button>
+                                <button type="button" onClick={() => deleteExperience(item._id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-4 h-4"/></button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </section>
-                      <section className="rounded-3xl border border-gray-800 bg-gray-950 p-5 shadow-lg h-fit">
-                        <h4 className="text-lg font-semibold text-white mb-4">{timelineEditId ? 'Update Timeline' : 'Create Timeline'}</h4>
-                        <form onSubmit={submitTimeline} className="space-y-4">
-                          <input type="text" value={timelineForm.title} onChange={(e) => setTimelineForm(s => ({...s, title: e.target.value}))} placeholder="Role / Degree" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
-                          <input type="text" value={timelineForm.date} onChange={(e) => setTimelineForm(s => ({...s, date: e.target.value}))} placeholder="Date (e.g. 2021 - Present)" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
-                          <input type="text" value={timelineForm.location} onChange={(e) => setTimelineForm(s => ({...s, location: e.target.value}))} placeholder="Location / Company" className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
-                          <select value={timelineForm.type} onChange={(e) => setTimelineForm(s => ({...s, type: e.target.value}))} className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all">
-                            <option value="work">Work Experience</option>
-                            <option value="education">Education</option>
-                            <option value="certification">Certification</option>
-                          </select>
-                          <textarea value={timelineForm.description} onChange={(e) => setTimelineForm(s => ({...s, description: e.target.value}))} placeholder="Description" rows={3} className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all resize-none" />
-                          <input type="number" value={timelineForm.order} onChange={(e) => setTimelineForm(s => ({...s, order: Number(e.target.value)}))} placeholder="Order" className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
-                          <div className="flex flex-col gap-3 sm:flex-row">
-                            <button type="submit" disabled={loading} className="w-full rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed">{timelineEditId ? 'Update' : 'Create'}</button>
-                            <button type="button" onClick={resetTimelineForm} className="w-full rounded-2xl border border-gray-700 bg-gray-800 px-5 py-3 text-sm font-semibold text-white transition-all hover:border-primary">Reset</button>
+
+                      <section className="rounded-2xl border border-gray-800 bg-black/50 p-6">
+                        <h4 className="text-lg font-semibold text-white mb-4">{experienceEditId ? 'Update Experience' : 'Add Experience'}</h4>
+                        <form onSubmit={submitExperience} className="space-y-4">
+                          <input type="text" value={experienceForm.projectName} onChange={(e) => setExperienceForm(s => ({...s, projectName: e.target.value}))} placeholder="Project/Company Name" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <input type="text" value={experienceForm.role} onChange={(e) => setExperienceForm(s => ({...s, role: e.target.value}))} placeholder="Role" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <input type="text" value={experienceForm.organization} onChange={(e) => setExperienceForm(s => ({...s, organization: e.target.value}))} placeholder="Organization/Company" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <textarea value={experienceForm.description} onChange={(e) => setExperienceForm(s => ({...s, description: e.target.value}))} placeholder="Description" rows={3} className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all resize-none" />
+                          <input type="file" onChange={(e) => { if (e.target.files && e.target.files[0]) setImageFile(e.target.files[0]); }} className="w-full text-gray-400 file:mr-4 file:rounded-full file:border-0 file:bg-gray-800 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-700 focus:outline-none" />
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="text" value={experienceForm.startDate} onChange={(e) => setExperienceForm(s => ({...s, startDate: e.target.value}))} placeholder="Start Date" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                            <input type="text" value={experienceForm.endDate} onChange={(e) => setExperienceForm(s => ({...s, endDate: e.target.value}))} placeholder="End Date / Present" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          </div>
+                          <div className="flex gap-4 pt-2">
+                            <button type="submit" disabled={loading} className="w-full rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed">{experienceEditId ? 'Update' : 'Create'}</button>
+                            <button type="button" onClick={resetExperienceForm} className="w-full rounded-2xl border border-gray-700 bg-gray-800 px-5 py-3 text-sm font-semibold text-white transition-all hover:border-primary">Reset</button>
                           </div>
                         </form>
                       </section>
                     </div>
                   )}
-                </>
+
+                  {activeSection === 'education' && (
+                    <div className="space-y-8">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-white">Education Management</h2>
+                          <p className="text-gray-400">Add or edit your education background.</p>
+                        </div>
+                      </div>
+                      
+                      <section className="rounded-2xl border border-gray-800 bg-black/50 p-6">
+                        <h3 className="text-lg font-semibold text-white mb-4">Current Education</h3>
+                        <div className="grid gap-4">
+                          {educationItems.map((item) => (
+                            <div key={item._id} className="flex items-center justify-between rounded-xl bg-gray-900/50 p-4 border border-gray-800">
+                              <div>
+                                <h4 className="font-semibold text-white">{item.degreeName} @ {item.collegeName}</h4>
+                                <p className="text-sm text-gray-400">{item.location} | {item.startYear} - {item.passingOutYear}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => editEducation(item)} className="text-gray-400 hover:text-white"><Edit3 className="w-4 h-4"/></button>
+                                <button type="button" onClick={() => deleteEducation(item._id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-4 h-4"/></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="rounded-2xl border border-gray-800 bg-black/50 p-6">
+                        <h4 className="text-lg font-semibold text-white mb-4">{educationEditId ? 'Update Education' : 'Add Education'}</h4>
+                        <form onSubmit={submitEducation} className="space-y-4">
+                          <input type="text" value={educationForm.collegeName} onChange={(e) => setEducationForm(s => ({...s, collegeName: e.target.value}))} placeholder="College Name" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <input type="text" value={educationForm.degreeName} onChange={(e) => setEducationForm(s => ({...s, degreeName: e.target.value}))} placeholder="Degree Name" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <input type="text" value={educationForm.location} onChange={(e) => setEducationForm(s => ({...s, location: e.target.value}))} placeholder="Location" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="text" value={educationForm.startYear} onChange={(e) => setEducationForm(s => ({...s, startYear: e.target.value}))} placeholder="Start Year" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                            <input type="text" value={educationForm.passingOutYear} onChange={(e) => setEducationForm(s => ({...s, passingOutYear: e.target.value}))} placeholder="Passing Out Year" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          </div>
+                          <input type="text" value={educationForm.percentage} onChange={(e) => setEducationForm(s => ({...s, percentage: e.target.value}))} placeholder="Percentage/CGPA" required className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:outline-none focus:border-primary transition-all" />
+                          <div className="flex gap-4 pt-2">
+                            <button type="submit" disabled={loading} className="w-full rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed">{educationEditId ? 'Update' : 'Create'}</button>
+                            <button type="button" onClick={resetEducationForm} className="w-full rounded-2xl border border-gray-700 bg-gray-800 px-5 py-3 text-sm font-semibold text-white transition-all hover:border-primary">Reset</button>
+                          </div>
+                        </form>
+                      </section>
+                    </div>
+                  )}
+
+                  {activeSection === 'contacts' && (
+                    <div className="space-y-8">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-white">Contact Messages</h2>
+                          <p className="text-gray-400">View and manage messages from your portfolio contact form.</p>
+                        </div>
+                      </div>
+                      
+                      <section className="rounded-2xl border border-gray-800 bg-black/50 p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                          <h3 className="text-lg font-semibold text-white">Messages ({contacts.length})</h3>
+                          <div className="relative max-w-sm w-full">
+                            <input
+                              type="text"
+                              placeholder="Search by name, email or subject..."
+                              value={contactSearch}
+                              onChange={(e) => setContactSearch(e.target.value)}
+                              className="w-full rounded-xl border border-gray-700 bg-gray-900 pl-4 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-primary transition-all"
+                            />
+                            <div className="absolute right-3 top-2.5 text-gray-500">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          {contacts
+                            .filter(c => 
+                              c.name.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                              c.email.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                              c.subject.toLowerCase().includes(contactSearch.toLowerCase())
+                            )
+                            .map((msg) => (
+                              <div key={msg._id} className="rounded-2xl bg-gray-900/50 p-5 border border-gray-800">
+                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-1">
+                                      <h4 className="text-lg font-bold text-white">{msg.subject}</h4>
+                                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">
+                                        {new Date(msg.createdAt).toLocaleDateString()} {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-3 text-sm">
+                                      <span className="font-semibold text-primary">{msg.name}</span>
+                                      <span className="text-gray-600">•</span>
+                                      <a href={`mailto:${msg.email}`} className="text-gray-400 hover:text-white transition-colors">{msg.email}</a>
+                                    </div>
+                                    <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed p-4 bg-black/30 rounded-xl border border-gray-800/50">
+                                      {msg.message}
+                                    </p>
+                                  </div>
+                                  <div className="flex md:flex-col gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteContact(msg._id)}
+                                      disabled={loading}
+                                      className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                      title="Delete Message"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                          ))}
+                          {contacts.length === 0 && (
+                            <div className="text-center py-10 text-gray-500 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800">
+                              No contact messages found.
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </motion.div>

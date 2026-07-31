@@ -11,11 +11,11 @@ export default function Hero() {
   useEffect(() => {
     const fetchResume = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/resume');
+        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/resume');
         if (res.ok) {
           const data = await res.json();
           if (data && data.url) {
-            setResumeUrl(`http://localhost:5000${data.url}`);
+            setResumeUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${data.url}`);
           }
         }
       } catch (err) {
@@ -28,13 +28,13 @@ export default function Hero() {
     <section id="home" className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full flex flex-col md:flex-row items-center justify-between gap-12">
-        <motion.div 
+        <motion.div
           className="flex-1 text-center md:text-left"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
-          <motion.h2 
+          <motion.h2
             className="text-primary font-semibold tracking-wider uppercase mb-3"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -42,11 +42,11 @@ export default function Hero() {
           >
             Welcome to my portfolio
           </motion.h2>
-          
-          <h1 className="text-5xl md:text-7xl font-extrabold mb-4 leading-tight">
-            Hi, I'm <span className="text-primary">Rahul</span>
+
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-[4.5rem] font-extrabold mb-4 leading-tight tracking-tight lg:whitespace-nowrap">
+            Hi, I'm <span className="text-primary">Rahul Mahaseth</span>
           </h1>
-          
+
           <div className="text-2xl md:text-3xl font-bold text-gray-600 dark:text-gray-300 mb-6 h-12">
             <TypeAnimation
               sequence={[
@@ -58,7 +58,7 @@ export default function Hero() {
                 2000,
                 'React Developer',
                 2000,
-                'AI Enthusiast',
+                'AI/DL Engineer',
                 2000,
                 'Problem Solver',
                 2000,
@@ -70,12 +70,12 @@ export default function Hero() {
           </div>
 
           <p className="text-gray-600 dark:text-gray-400 text-lg md:text-xl max-w-2xl mx-auto md:mx-0 mb-8 leading-relaxed">
-            I build world-class, responsive, and futuristic web applications. 
+            I build world-class, responsive, and futuristic web applications.
             Passionate about solving complex problems with elegant code.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 mb-10">
-            <motion.a 
+            <motion.a
               href={resumeUrl || '#'}
               download
               whileHover={{ scale: 1.05 }}
@@ -85,7 +85,7 @@ export default function Hero() {
               <Download size={20} />
               Download Resume
             </motion.a>
-            <motion.a 
+            <motion.a
               href="#contact"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -120,7 +120,7 @@ export default function Hero() {
           </div>
         </motion.div>
 
-        <motion.div 
+        <motion.div
           className="flex-1 w-full max-w-md relative"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -128,9 +128,9 @@ export default function Hero() {
         >
           <div className="relative w-full aspect-square rounded-full border-2 border-primary/20 p-4">
             <div className="w-full h-full rounded-full overflow-hidden border-4 border-white dark:border-gray-800 shadow-xl relative bg-primary/10 p-1">
-              <img 
+              <img
                 src={profilePic}
-                alt="Rahul Mahaseth" 
+                alt="Rahul Mahaseth"
                 className="w-full h-full object-cover rounded-full bg-white dark:bg-gray-900"
               />
             </div>
