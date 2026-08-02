@@ -99,8 +99,7 @@ export default function Hero() {
             {[
               { icon: <FaGithub size={24} />, href: "https://github.com/rahulmahasetha", label: "GitHub" },
               { icon: <FaLinkedin size={24} />, href: "https://www.linkedin.com/in/rahul-mahaseth-37651b291", label: "LinkedIn" },
-              { icon: <Mail size={24} />, href: "mailto:rahulmahaseth700@gmail.com", label: "Email" },
-              { icon: <Code2 size={24} />, href: "#", label: "LeetCode" }
+              { icon: <Mail size={24} />, href: "mailto:rahulmahaseth700@gmail.com", label: "Email" }
             ].map((social, index) => (
               <motion.a
                 key={index}

@@ -18,6 +18,7 @@ const Nav = require('./models/Nav');
 const Setting = require('./models/Setting');
 const About = require('./models/About');
 const Resume = require('./models/Resume');
+const Visitor = require('./models/Visitor');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -906,6 +907,37 @@ app.delete('/api/resume/:id', async (req, res) => {
     res.status(200).json({ message: 'Resume deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete resume' });
+  }
+});
+
+// Visitor API routes
+app.get('/api/visitor/count', async (req, res) => {
+  try {
+    let visitor = await Visitor.findOne();
+    if (!visitor) {
+      visitor = new Visitor({ count: 0 });
+      await visitor.save();
+    }
+    res.json({ count: visitor.count });
+  } catch (error) {
+    console.error('Error fetching visitor count:', error);
+    res.status(500).json({ error: 'Failed to fetch visitor count' });
+  }
+});
+
+app.post('/api/visitor/increment', async (req, res) => {
+  try {
+    let visitor = await Visitor.findOne();
+    if (!visitor) {
+      visitor = new Visitor({ count: 1 });
+    } else {
+      visitor.count += 1;
+    }
+    await visitor.save();
+    res.json({ count: visitor.count });
+  } catch (error) {
+    console.error('Error incrementing visitor count:', error);
+    res.status(500).json({ error: 'Failed to increment visitor count' });
   }
 });
 
