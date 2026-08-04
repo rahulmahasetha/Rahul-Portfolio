@@ -434,9 +434,15 @@ const auditLog = async (req, res, next) => {
   next();
 };
 
-// Apply auth and audit globally to modifying routes, EXCEPT /api/auth
+// Apply auth and audit globally to modifying routes, EXCEPT auth and public POST routes
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/auth')) return next();
+  if (
+    req.path.startsWith('/api/auth') || 
+    (req.method === 'POST' && req.path === '/api/contact') || 
+    (req.method === 'POST' && req.path === '/api/visitor/increment')
+  ) {
+    return next();
+  }
   if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
     // CSRF Protection
     const tokenFromCookie = req.cookies?.csrfToken;
