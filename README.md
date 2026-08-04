@@ -241,12 +241,6 @@ Navigate to `/admin` to access the Admin Portal.
 4. Enter the admin password and click **Login**
 5. Session lasts until logout or **15 minutes of inactivity**
 
-### Default Admin Password
-On first run with an empty database, the default password is set automatically to:
-```
-Raj Mahaseth@123
-```
-Change it immediately from **Admin → Settings**.
 
 ### Sections Managed
 | Section | Capabilities |
