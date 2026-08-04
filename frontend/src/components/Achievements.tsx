@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../utils/url';
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Award, Star, Zap, Target, Circle } from 'lucide-react';
@@ -58,7 +59,7 @@ const Achievements = memo(function Achievements() {
                 </p>
                 {item.imageUrl && (
                   <div className="mt-4">
-                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${item.imageUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-800 bg-transparent px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors hover:bg-gray-100 dark:hover:bg-gray-900">
+                    <a href={resolveMediaUrl(item.imageUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-800 bg-transparent px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors hover:bg-gray-100 dark:hover:bg-gray-900">
                       View Certificate / Image
                     </a>
                   </div>

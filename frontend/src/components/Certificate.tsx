@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../utils/url';
 import { useState, useEffect, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, Unlock, Download, Eye } from 'lucide-react';
@@ -25,14 +26,14 @@ const Certificate = memo(function Certificate() {
 
   const getDownloadUrl = (url: string | undefined) => {
     if (!url) return '#';
-    if (url.endsWith('.pdf')) return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${url}`;
+    if (url.endsWith('.pdf')) return resolveMediaUrl(url);
     
     const match = url.match(/(\.[\w\d_-]+)$/i);
     if (match) {
       const originalPath = url.substring(0, url.lastIndexOf(match[1])) + '_original' + match[1];
-      return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${originalPath}`;
+      return resolveMediaUrl(originalPath);
     }
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${url}`;
+    return resolveMediaUrl(url);
   };
 
   const [unlockedCertificates, setUnlockedCertificates] = useState<Set<string>>(new Set());
@@ -240,7 +241,7 @@ const Certificate = memo(function Certificate() {
                 </motion.button>
               </div>
               <img
-                src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${selectedCertificate.imageUrl}`}
+                src={resolveMediaUrl(selectedCertificate.imageUrl)}
                 alt={selectedCertificate.title}
                 className="w-full object-contain mb-8 max-h-[60vh]"
                 loading="lazy"

@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const projectSchema = new mongoose.Schema({
   title: { type: String, required: true },
   imageUrl: { type: String, default: '' },
+  imagePublicId: { type: String },
   images: { type: [String], default: [] },
+  imagesPublicIds: { type: [String], default: [] },
   problem: { type: String, default: '' },
   features: { type: [String], default: [] },
   tech: { type: [String], default: [] },

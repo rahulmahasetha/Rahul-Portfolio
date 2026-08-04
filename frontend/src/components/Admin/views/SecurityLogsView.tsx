@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../../../utils/url';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, Activity, UserCheck, Smartphone, Globe, AlertTriangle } from 'lucide-react';
@@ -247,7 +248,7 @@ export function SecurityLogsView() {
                     </td>
                     <td className="px-6 py-4">
                       {log.snapshotUrl ? (
-                        <img src={(import.meta.env.VITE_API_URL || 'http://localhost:5001') + log.snapshotUrl} alt="Login Snapshot" className="h-12 w-16 object-cover rounded-lg border border-admin-border" />
+                        <img src={resolveMediaUrl(log.snapshotUrl)} alt="Login Snapshot" className="h-12 w-16 object-cover rounded-lg border border-admin-border" />
                       ) : (
                         <span className="text-xs text-admin-text-secondary italic">No snapshot</span>
                       )}

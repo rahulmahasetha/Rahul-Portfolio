@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../utils/url';
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X } from 'lucide-react';
@@ -55,7 +56,7 @@ export function ImageModal() {
   };
 
   const downloadUrl = getOriginalUrl(imageUrl);
-  const displayUrl = imageUrl.startsWith('http') ? imageUrl : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${imageUrl}`;
+  const displayUrl = imageUrl.startsWith('http') ? imageUrl : resolveMediaUrl(imageUrl);
 
   return (
     <AnimatePresence>

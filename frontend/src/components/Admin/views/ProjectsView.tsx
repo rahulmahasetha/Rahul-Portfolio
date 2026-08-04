@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../../../utils/url';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Briefcase, Search, Filter, Edit3, Trash2, Plus, ExternalLink, Image as ImageIcon, X } from 'lucide-react';
 import { FiGithub as Github } from 'react-icons/fi';
@@ -294,7 +295,7 @@ export function ProjectsView() {
                       <p className="text-sm font-medium text-white">{imageFile.name}</p>
                     ) : formData.imageUrl ? (
                       <>
-                        <img src={formData.imageUrl.startsWith('http') ? formData.imageUrl : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${formData.imageUrl}`} alt="cover" className="h-20 w-full object-cover rounded-lg mb-2" />
+                        <img src={formData.imageUrl.startsWith('http') ? formData.imageUrl : resolveMediaUrl(formData.imageUrl)} alt="cover" className="h-20 w-full object-cover rounded-lg mb-2" />
                         <p className="text-xs text-admin-text-secondary">Click to replace cover image</p>
                       </>
                     ) : (
@@ -333,7 +334,7 @@ export function ProjectsView() {
                       <div className="flex flex-wrap gap-2">
                         {existingImages.map((img, i) => (
                           <div key={i} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-admin-border">
-                            <img src={img.startsWith('http') ? img : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${img}`} alt={`gallery-${i}`} className="w-full h-full object-cover" />
+                            <img src={img.startsWith('http') ? img : resolveMediaUrl(img)} alt={`gallery-${i}`} className="w-full h-full object-cover" />
                             <button
                               type="button"
                               onClick={() => setExistingImages(prev => prev.filter((_, idx) => idx !== i))}

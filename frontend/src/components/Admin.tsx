@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../utils/url';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, X, Eye, Edit3, Trash2, ArrowLeft, ArrowRight, Lock, Shield, ShieldCheck, EyeOff } from 'lucide-react';
@@ -2342,7 +2343,7 @@ export default function Admin({ isAdminPath }: { isAdminPath?: boolean }) {
                             <h4 className="text-xl font-semibold text-white mb-2">{resumeRecord.originalName}</h4>
                             <p className="text-sm text-gray-400 mb-6">Uploaded: {new Date(resumeRecord.createdAt).toLocaleDateString()}</p>
                             <div className="flex gap-4">
-                              <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resumeRecord.url}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-700">
+                              <a href={resolveMediaUrl(resumeRecord.url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-700">
                                 <Eye className="w-4 h-4" /> View PDF
                               </a>
                               <button onClick={() => deleteResume(resumeRecord._id)} className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500">

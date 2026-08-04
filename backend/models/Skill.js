@@ -7,6 +7,7 @@ const skillSchema = new mongoose.Schema({
   displayOrder: { type: Number, default: 100 },
   description: { type: String, default: '' },
   iconUrl: { type: String, default: '' },
+  iconPublicId: { type: String },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date }
 }, {

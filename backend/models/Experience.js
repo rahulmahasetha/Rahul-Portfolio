@@ -7,7 +7,8 @@ const experienceSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   startDate: { type: String, required: true },
   endDate: { type: String, default: 'Present' },
-  imageUrl: { type: String, default: '' }
+  imageUrl: { type: String, default: '' },
+  imagePublicId: { type: String }
 }, {
   timestamps: true
 });

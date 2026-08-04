@@ -227,6 +227,43 @@ const validateUpload = async (req, res, next) => {
 
 
 const sharp = require('sharp');
+const { uploadToCloudinary, deleteFromCloudinary } = require('./utils/cloudinary');
+
+const cloudinaryUploadMiddleware = async (req, res, next) => {
+  try {
+    const processUpload = async (file) => {
+      let folder = 'portfolio_uploads';
+      if (req.path.includes('/api/projects')) folder = 'projects';
+      else if (req.path.includes('/api/certificates')) folder = 'certificates';
+      else if (req.path.includes('/api/academic-certificates')) folder = 'academic-certificates';
+      else if (req.path.includes('/api/experience')) folder = 'experience';
+      else if (req.path.includes('/api/resume')) folder = 'resume';
+      else if (req.path.includes('/api/about')) folder = 'about';
+      else if (req.path.includes('/api/auth/login')) folder = 'security';
+      else if (req.path.includes('/api/skills')) folder = 'skills';
+      else if (req.path.includes('/api/achievements')) folder = 'achievements';
+      
+      if (file.path && fs.existsSync(file.path)) {
+        const result = await uploadToCloudinary(file.path, folder);
+        file.cloudinaryUrl = result.secure_url;
+        file.cloudinaryId = result.public_id;
+      }
+    };
+    if (req.file) await processUpload(req.file);
+    if (req.files) {
+      for (const key in req.files) {
+        for (const file of req.files[key]) {
+          await processUpload(file);
+        }
+      }
+    }
+    next();
+  } catch (err) {
+    console.error('Cloudinary upload failed:', err);
+    next(err);
+  }
+};
+
 const optimizeUploads = async (req, res, next) => {
   try {
     const processFile = async (file) => {
@@ -282,7 +319,7 @@ app.use(useragent.express());
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback_key';
 
 // /api/auth/login
-app.post('/api/auth/login', upload.single('snapshot'), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/auth/login', upload.single('snapshot'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { password } = req.body;
     const ip = getClientIp(req);
@@ -306,7 +343,7 @@ app.post('/api/auth/login', upload.single('snapshot'), validateUpload, optimizeU
     });
 
     if (req.file) {
-      logEntry.snapshotUrl = `/uploads/${req.file.filename}`;
+      logEntry.snapshotUrl = req.file.cloudinaryUrl;
     }
 
     if (admin.lockUntil && admin.lockUntil > Date.now()) {
@@ -602,7 +639,7 @@ app.get('/api/certificates', async (req, res) => {
 });
 
 // Add new certificate (Admin)
-app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), optimizeUploads, async (req, res) => {
+app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { title, category, certificateType, organization, issueDate, certificateId, description } = req.body;
     
@@ -610,10 +647,10 @@ app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { n
     let pdfUrl = '';
 
     if (req.files && req.files['image'] && req.files['image'][0]) {
-      imageUrl = `/uploads/${req.files['image'][0].filename}`;
+      imageUrl = req.files['image'][0].cloudinaryUrl;
     }
     if (req.files && req.files['pdf'] && req.files['pdf'][0]) {
-      pdfUrl = `/uploads/${req.files['pdf'][0].filename}`;
+      pdfUrl = req.files['pdf'][0].cloudinaryUrl;
     }
 
     if (!imageUrl && req.body.imageUrl) {
@@ -645,7 +682,7 @@ app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { n
 });
 
 // Update certificate
-app.put('/api/certificates/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), optimizeUploads, async (req, res) => {
+app.put('/api/certificates/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, category, certificateType, organization, issueDate, certificateId, description } = req.body;
@@ -656,13 +693,13 @@ app.put('/api/certificates/:id', upload.fields([{ name: 'image', maxCount: 1 }, 
     }
 
     if (req.files && req.files['image'] && req.files['image'][0]) {
-      certificate.imageUrl = `/uploads/${req.files['image'][0].filename}`;
+      certificate.imageUrl = req.files['image'][0].cloudinaryUrl;
     } else if (req.body.imageUrl) {
       certificate.imageUrl = req.body.imageUrl;
     }
 
     if (req.files && req.files['pdf'] && req.files['pdf'][0]) {
-      certificate.pdfUrl = `/uploads/${req.files['pdf'][0].filename}`;
+      certificate.pdfUrl = req.files['pdf'][0].cloudinaryUrl;
     } else if (req.body.pdfUrl) {
       certificate.pdfUrl = req.body.pdfUrl;
     }
@@ -752,19 +789,19 @@ app.get('/api/academic-certificates', verifyAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/academic-certificates', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'pdfs', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/academic-certificates', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'pdfs', maxCount: 10 }]), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { title, category } = req.body;
     const images = [];
     if (req.files && req.files.images) {
       for (const file of req.files.images) {
-        images.push(`/uploads/${file.filename}`);
+        images.push(file.cloudinaryUrl);
       }
     }
     const pdfs = [];
     if (req.files && req.files.pdfs) {
       for (const file of req.files.pdfs) {
-        pdfs.push({ name: file.originalname, url: `/uploads/${file.filename}` });
+        pdfs.push({ name: file.originalname, url: file.cloudinaryUrl });
       }
     }
 
@@ -777,7 +814,7 @@ app.post('/api/academic-certificates', upload.fields([{ name: 'images', maxCount
   }
 });
 
-app.put('/api/academic-certificates/:id', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'pdfs', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
+app.put('/api/academic-certificates/:id', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'pdfs', maxCount: 10 }]), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, category, retainedImages, retainedPdfs } = req.body;
@@ -788,7 +825,7 @@ app.put('/api/academic-certificates/:id', upload.fields([{ name: 'images', maxCo
     }
     if (req.files && req.files.images) {
       for (const file of req.files.images) {
-        images.push(`/uploads/${file.filename}`);
+        images.push(file.cloudinaryUrl);
       }
     }
 
@@ -803,7 +840,7 @@ app.put('/api/academic-certificates/:id', upload.fields([{ name: 'images', maxCo
     }
     if (req.files && req.files.pdfs) {
       for (const file of req.files.pdfs) {
-        pdfs.push({ name: file.originalname, url: `/uploads/${file.filename}` });
+        pdfs.push({ name: file.originalname, url: file.cloudinaryUrl });
       }
     }
 
@@ -841,7 +878,7 @@ app.get('/api/skills', async (req, res) => {
   }
 });
 
-app.post('/api/skills', upload.single('icon'), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/skills', upload.single('icon'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { name, category, level, description, displayOrder, iconUrl } = req.body;
     if (!name || !category || level == null) {
@@ -850,7 +887,7 @@ app.post('/api/skills', upload.single('icon'), validateUpload, optimizeUploads, 
 
     let finalIconUrl = iconUrl || '';
     if (req.file) {
-      finalIconUrl = `/uploads/${req.file.filename}`;
+      finalIconUrl = req.file.cloudinaryUrl;
     }
 
     const newSkill = new Skill({
@@ -871,7 +908,7 @@ app.post('/api/skills', upload.single('icon'), validateUpload, optimizeUploads, 
   }
 });
 
-app.put('/api/skills/:id', upload.single('icon'), validateUpload, optimizeUploads, async (req, res) => {
+app.put('/api/skills/:id', upload.single('icon'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, category, level, description, displayOrder, iconUrl } = req.body;
@@ -882,7 +919,7 @@ app.put('/api/skills/:id', upload.single('icon'), validateUpload, optimizeUpload
     }
 
     if (req.file) {
-      skill.iconUrl = `/uploads/${req.file.filename}`;
+      skill.iconUrl = req.file.cloudinaryUrl;
     } else if (iconUrl) {
       skill.iconUrl = iconUrl;
     }
@@ -949,18 +986,18 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
-app.post('/api/projects', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'gallery', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/projects', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'gallery', maxCount: 10 }]), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { title, problem, features, tech, github, demo, description, order } = req.body;
     let imageUrl = req.body.imageUrl || '';
     let images = [];
 
     if (req.files && req.files.image && req.files.image.length > 0) {
-      imageUrl = `/uploads/${req.files.image[0].filename}`;
+      imageUrl = req.files.image[0].cloudinaryUrl;
     }
     
     if (req.files && req.files.gallery) {
-      images = req.files.gallery.map(file => `/uploads/${file.filename}`);
+      images = req.files.gallery.map(file => file.cloudinaryUrl);
     }
 
     let parsedFeatures = [];
@@ -995,7 +1032,7 @@ app.post('/api/projects', upload.fields([{ name: 'image', maxCount: 1 }, { name:
   }
 });
 
-app.put('/api/projects/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'gallery', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
+app.put('/api/projects/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'gallery', maxCount: 10 }]), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, problem, features, tech, github, demo, description, order } = req.body;
@@ -1006,7 +1043,7 @@ app.put('/api/projects/:id', upload.fields([{ name: 'image', maxCount: 1 }, { na
     }
 
     if (req.files && req.files.image && req.files.image.length > 0) {
-      project.imageUrl = `/uploads/${req.files.image[0].filename}`;
+      project.imageUrl = req.files.image[0].cloudinaryUrl;
     } else if (req.body.imageUrl) {
       project.imageUrl = req.body.imageUrl;
     }
@@ -1028,7 +1065,7 @@ app.put('/api/projects/:id', upload.fields([{ name: 'image', maxCount: 1 }, { na
     // New uploaded images
     let newGalleryImages = [];
     if (req.files && req.files.gallery) {
-      newGalleryImages = req.files.gallery.map(file => `/uploads/${file.filename}`);
+      newGalleryImages = req.files.gallery.map(file => file.cloudinaryUrl);
     }
 
     project.images = [...existingImages, ...newGalleryImages];
@@ -1218,11 +1255,11 @@ app.get('/api/experience', async (req, res) => {
   }
 });
 
-app.post('/api/experience', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/experience', upload.single('image'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const expData = { ...req.body };
     if (req.file) {
-      expData.imageUrl = `/uploads/${req.file.filename}`;
+      expData.imageUrl = req.file.cloudinaryUrl;
     }
     const newExp = new Experience(expData);
     await newExp.save();
@@ -1234,12 +1271,12 @@ app.post('/api/experience', upload.single('image'), validateUpload, optimizeUplo
   }
 });
 
-app.put('/api/experience/:id', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
+app.put('/api/experience/:id', upload.single('image'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const expData = { ...req.body };
     if (req.file) {
-      expData.imageUrl = `/uploads/${req.file.filename}`;
+      expData.imageUrl = req.file.cloudinaryUrl;
     }
     const exp = await Experience.findByIdAndUpdate(id, expData, { new: true });
     if (!exp) return res.status(404).json({ error: 'Experience not found' });
@@ -1404,12 +1441,12 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/achievements', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/achievements', upload.single('image'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { title, description, icon, color } = req.body;
     let imageUrl = req.body.imageUrl || '';
     if (req.file) {
-      imageUrl = `/uploads/${req.file.filename}`;
+      imageUrl = req.file.cloudinaryUrl;
     }
     
     if (!title) {
@@ -1432,12 +1469,12 @@ app.post('/api/achievements', upload.single('image'), validateUpload, optimizeUp
     res.status(500).json({ error: 'Failed to add achievement' });
   }
 });
-app.put('/api/achievements/:id', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
+app.put('/api/achievements/:id', upload.single('image'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
     if (req.file) {
-      updateData.imageUrl = `/uploads/${req.file.filename}`;
+      updateData.imageUrl = req.file.cloudinaryUrl;
     }
     
     const updated = await Achievement.findByIdAndUpdate(id, updateData, { new: true });
@@ -1549,7 +1586,7 @@ app.get('/api/resume', async (req, res) => {
   }
 });
 
-app.post('/api/resume', upload.single('resume'), validateUpload, optimizeUploads, async (req, res) => {
+app.post('/api/resume', upload.single('resume'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
@@ -1563,7 +1600,7 @@ app.post('/api/resume', upload.single('resume'), validateUpload, optimizeUploads
     const newResume = new Resume({
       filename: req.file.filename,
       originalName: req.file.originalname,
-      url: `/uploads/${req.file.filename}`
+      url: req.file.cloudinaryUrl
     });
 
     await newResume.save();
@@ -1578,6 +1615,7 @@ app.post('/api/resume', upload.single('resume'), validateUpload, optimizeUploads
 app.delete('/api/resume/:id', async (req, res) => {
   try {
     const resume = await Resume.findByIdAndDelete(req.params.id);
+    if (resume && resume.publicId) await deleteFromCloudinary(resume.publicId, 'raw');
     if (!resume) return res.status(404).json({ error: 'Resume not found' });
     invalidatePortfolioCache();
     res.status(200).json({ message: 'Resume deleted successfully' });

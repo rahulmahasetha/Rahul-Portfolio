@@ -1,3 +1,4 @@
+import { resolveMediaUrl } from '../../../utils/url';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, FileText, Image as ImageIcon, Upload, Trash2, Edit2, Download, Plus, ChevronLeft, ChevronRight, X, Eye } from 'lucide-react';
@@ -259,7 +260,7 @@ export function AcademicCertificatesView() {
               {cert.images.length > 0 ? (
                 <div className="relative h-48 bg-admin-surface overflow-hidden">
                   <img
-                    src={(import.meta.env.VITE_API_URL || 'http://localhost:5001') + cert.images[0]}
+                    src={resolveMediaUrl(cert.images[0])}
                     alt={cert.title}
                     className="w-full h-full object-cover"
                   />
@@ -366,7 +367,7 @@ export function AcademicCertificatesView() {
                 <div className="grid grid-cols-4 gap-3 mb-3">
                   {retainedImages.map((img, idx) => (
                     <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-admin-border">
-                      <img src={(import.meta.env.VITE_API_URL || 'http://localhost:5001') + img} className="w-full h-full object-cover" />
+                      <img src={resolveMediaUrl(img)} className="w-full h-full object-cover" />
                       <button type="button" onClick={() => removeRetainedImage(idx)} className="absolute top-1 right-1 bg-black/60 p-1 rounded hover:bg-red-500 text-white"><X className="h-3 w-3" /></button>
                     </div>
                   ))}
@@ -422,7 +423,7 @@ export function AcademicCertificatesView() {
       {previewImage && (
         <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
           <button className="absolute top-4 right-4 text-white hover:text-gray-300"><X className="h-8 w-8" /></button>
-          <img src={(import.meta.env.VITE_API_URL || 'http://localhost:5001') + previewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg" onClick={e => e.stopPropagation()} />
+          <img src={resolveMediaUrl(previewImage)} className="max-w-full max-h-[90vh] object-contain rounded-lg" onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>
