@@ -143,9 +143,11 @@ app.use(cors({
     const cleanOrigin = origin ? origin.replace(/\/$/, '') : '';
     const cleanAllowed = allowedOrigins.map(url => url ? url.replace(/\/$/, '') : '');
     
-    if (!origin || cleanAllowed.indexOf(cleanOrigin) !== -1) {
+    // Allow if matches explicit list OR if it's a vercel.app domain (highly resilient)
+    if (!origin || cleanAllowed.indexOf(cleanOrigin) !== -1 || (origin && origin.endsWith('.vercel.app'))) {
       callback(null, true);
     } else {
+      console.warn('Blocked by CORS:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -1643,17 +1645,11 @@ app.post('/api/visitor/increment', async (req, res) => {
   }
 });
 
-// Serve frontend in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-  app.use((req, res) => {
-    if (req.method === 'GET' && !req.path.startsWith('/api')) {
-      res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-    } else {
-      res.status(404).json({ error: 'API route not found' });
-    }
-  });
-}
+// Since the frontend is hosted separately on Vercel, the backend acts strictly as an API.
+// Catch all unhandled routes and return a clean 404 JSON response instead of crashing with ENOENT.
+app.use((req, res) => {
+  res.status(404).json({ error: 'API route not found or not supported.' });
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
