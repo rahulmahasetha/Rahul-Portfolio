@@ -148,7 +148,7 @@ app.use(cors({
       !origin || 
       cleanAllowed.indexOf(cleanOrigin) !== -1 || 
       (origin && origin.endsWith('.vercel.app')) ||
-      (origin && (origin === 'https://www.rahulmahaseth.com.np' || origin === 'https://rahulmahaseth.com.np'))
+      (origin && origin.includes('rahulmahaseth.com.np'))
     ) {
       callback(null, true);
     } else {
