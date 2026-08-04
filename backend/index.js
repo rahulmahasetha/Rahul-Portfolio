@@ -143,8 +143,13 @@ app.use(cors({
     const cleanOrigin = origin ? origin.replace(/\/$/, '') : '';
     const cleanAllowed = allowedOrigins.map(url => url ? url.replace(/\/$/, '') : '');
     
-    // Allow if matches explicit list OR if it's a vercel.app domain (highly resilient)
-    if (!origin || cleanAllowed.indexOf(cleanOrigin) !== -1 || (origin && origin.endsWith('.vercel.app'))) {
+    // Allow if matches explicit list OR if it's a vercel.app domain OR the custom domain
+    if (
+      !origin || 
+      cleanAllowed.indexOf(cleanOrigin) !== -1 || 
+      (origin && origin.endsWith('.vercel.app')) ||
+      (origin && (origin === 'https://www.rahulmahaseth.com.np' || origin === 'https://rahulmahaseth.com.np'))
+    ) {
       callback(null, true);
     } else {
       console.warn('Blocked by CORS:', origin);
