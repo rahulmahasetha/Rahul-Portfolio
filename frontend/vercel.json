@@ -3,6 +3,14 @@
   "installCommand": "npm ci",
   "outputDirectory": "dist",
   "framework": "vite",
+  "build": {
+    "env": {
+      "VITE_API_URL": "https://rahul-portfolio-ysmo.onrender.com"
+    }
+  },
+  "env": {
+    "VITE_API_URL": "https://rahul-portfolio-ysmo.onrender.com"
+  },
   "rewrites": [
     {
       "source": "/(.*)",
