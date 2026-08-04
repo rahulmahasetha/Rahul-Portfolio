@@ -140,7 +140,10 @@ const allowedOrigins = [
 // CORS
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    const cleanOrigin = origin ? origin.replace(/\/$/, '') : '';
+    const cleanAllowed = allowedOrigins.map(url => url ? url.replace(/\/$/, '') : '');
+    
+    if (!origin || cleanAllowed.indexOf(cleanOrigin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
