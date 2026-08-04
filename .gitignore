@@ -38,3 +38,5 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+backend/uploads/
+backend/modify_index.js

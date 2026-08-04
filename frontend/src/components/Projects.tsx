@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react';
+import { memo, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ChevronLeft, ChevronRight, Download, Archive } from 'lucide-react';
 import { FaGithub } from 'react-icons/fa';
+import { usePortfolioData } from '../hooks/usePortfolioData';
+import { useImageModal } from '../contexts/ImageModalContext';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 interface ProjectItem {
   _id: string;
   title: string;
   imageUrl: string;
+  images?: string[];
   problem: string;
   features: string[];
   tech: string[];
@@ -16,38 +21,160 @@ interface ProjectItem {
   order?: number;
 }
 
-const placeholderProjects: ProjectItem[] = [
-  {
-    _id: 'flight',
-    title: 'Flight Booking System',
-    imageUrl: '',
-    problem: 'Complex multi-stop flight bookings and real-time availability tracking.',
-    features: ['Multi-stop routing', 'Real-time payment integration', 'Admin dashboard', 'PDF tickets'],
-    tech: ['Django', 'Python', 'PostgreSQL', 'Tailwind CSS', 'JavaScript'],
-    github: 'https://github.com/Rahul-Portfolio/flight-booking',
-    demo: '#',
-    description: ''
+function resolveUrl(url: string) {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${API_URL}${url}`;
+}
+
+// ── Carousel component ──────────────────────────────────────────────────────
+function ProjectCarousel({ project, onImageClick }: { project: ProjectItem; onImageClick: (url: string, title: string) => void }) {
+  const allImages = [project.imageUrl, ...(project.images || [])].filter(Boolean);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const prev = useCallback(() => {
+    setActiveIdx(i => (i - 1 + allImages.length) % allImages.length);
+  }, [allImages.length]);
+
+  const next = useCallback(() => {
+    setActiveIdx(i => (i + 1) % allImages.length);
+  }, [allImages.length]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > 40) delta < 0 ? next() : prev();
+    touchStartX.current = null;
+  };
+
+  const downloadZip = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/projects/${project._id}/download-images`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = res.headers.get('content-disposition')?.match(/filename="?([^"]+)"?/)?.[1] || `${project.title}_images.zip`;
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (allImages.length === 0) return null;
+
+  // Single image — simple display without carousel chrome
+  if (allImages.length === 1) {
+    return (
+      <div className="mb-6 mt-4 max-w-2xl">
+        <div className="overflow-hidden rounded-xl bg-gray-100 dark:bg-[#111111] border border-gray-200 dark:border-gray-800">
+          <img
+            src={resolveUrl(allImages[0])}
+            alt={project.title}
+            className="w-full max-h-[300px] object-cover cursor-pointer hover:scale-[1.02] transition-transform duration-300"
+            onClick={() => onImageClick(allImages[0], project.title)}
+          />
+        </div>
+        <button
+          onClick={downloadZip}
+          disabled={downloading}
+          className="mt-3 flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-[#db5b44] transition-colors group"
+        >
+          <Download size={14} className="group-hover:scale-110 transition-transform" />
+          {downloading ? 'Preparing…' : 'Download original image'}
+        </button>
+      </div>
+    );
   }
-];
 
-export default function Projects() {
-  const [projects, setProjects] = useState<ProjectItem[]>(placeholderProjects);
+  // Multi-image carousel
+  return (
+    <div className="mb-6 mt-4 max-w-2xl">
+      {/* Main slide */}
+      <div
+        className="relative overflow-hidden rounded-xl bg-gray-100 dark:bg-[#111111] border border-gray-200 dark:border-gray-800 select-none"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <img
+          key={activeIdx}
+          src={resolveUrl(allImages[activeIdx])}
+          alt={`${project.title} – ${activeIdx + 1}`}
+          className="w-full max-h-[300px] object-cover cursor-pointer"
+          onClick={() => onImageClick(allImages[activeIdx], project.title)}
+          style={{ display: 'block' }}
+        />
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/projects');
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setProjects(data);
-        }
-      } catch (error) {
-        console.error('Error loading projects', error);
-      }
-    };
+        {/* Arrows */}
+        <button
+          onClick={prev}
+          aria-label="Previous image"
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <button
+          onClick={next}
+          aria-label="Next image"
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
+        >
+          <ChevronRight size={18} />
+        </button>
 
-    fetchProjects();
-  }, []);
+        {/* Counter badge */}
+        <span className="absolute bottom-2 right-3 text-xs text-white/80 bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-sm">
+          {activeIdx + 1} / {allImages.length}
+        </span>
+      </div>
+
+      {/* Thumbnails */}
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+        {allImages.map((img, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveIdx(i)}
+            className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${
+              i === activeIdx
+                ? 'border-[#db5b44] opacity-100 scale-105'
+                : 'border-transparent opacity-60 hover:opacity-90'
+            }`}
+          >
+            <img src={resolveUrl(img)} alt={`thumb-${i}`} className="w-full h-full object-cover" />
+          </button>
+        ))}
+      </div>
+
+      {/* Download all button */}
+      <button
+        onClick={downloadZip}
+        disabled={downloading}
+        className="mt-3 flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-[#db5b44] transition-colors group"
+      >
+        <Archive size={14} className="group-hover:scale-110 transition-transform" />
+        {downloading ? 'Preparing ZIP…' : `Download all ${allImages.length} images (.zip)`}
+      </button>
+    </div>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────────────────
+const Projects = memo(function Projects() {
+  const { data, isLoading: _loading } = usePortfolioData();
+  const { openImage } = useImageModal();
+  const projects: ProjectItem[] = data?.projects || [];
 
   return (
     <section id="projects" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
@@ -88,6 +215,10 @@ export default function Projects() {
                     )}
                   </div>
                 </div>
+
+                {/* Carousel (single or multi-image) */}
+                <ProjectCarousel project={project} onImageClick={openImage} />
+
                 {project.problem && (
                   <div className="mb-7">
                     <span className="text-base font-semibold text-gray-900 dark:text-gray-100 block mb-1">Problem</span>
@@ -127,4 +258,6 @@ export default function Projects() {
       </div>
     </section>
   );
-}
+});
+
+export default Projects;

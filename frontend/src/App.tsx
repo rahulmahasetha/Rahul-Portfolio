@@ -1,17 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import About from './components/About';
-import Skills from './components/Skills';
-import Certificate from './components/Certificate';
-import Projects from './components/Projects';
-import Experience from './components/Experience';
-import Education from './components/Education';
-import Achievements from './components/Achievements';
-import Contact from './components/Contact';
 import Footer from './components/Footer';
-import Admin from './components/Admin';
 import { motion, useScroll, useSpring } from 'framer-motion';
+import { SectionSkeleton } from './components/SectionSkeleton';
+import { ImageModalProvider } from './contexts/ImageModalContext';
+import { ImageModal } from './components/ImageModal';
+
+const Skills = lazy(() => import('./components/Skills'));
+const Certificate = lazy(() => import('./components/Certificate'));
+const Projects = lazy(() => import('./components/Projects'));
+const Experience = lazy(() => import('./components/Experience'));
+const Education = lazy(() => import('./components/Education'));
+const Achievements = lazy(() => import('./components/Achievements'));
+const Contact = lazy(() => import('./components/Contact'));
+const Admin = lazy(() => import('./components/Admin/index'));
 
 function App() {
   const [darkMode, setDarkMode] = useState(true);
@@ -37,35 +41,57 @@ function App() {
   }, []);
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-[#0a0a0a]' : 'bg-white'}`}>
-      
-      {/* Scroll Progress Bar */}
-      <motion.div
-        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary transform origin-left z-[100]"
-        style={{ scaleX }}
-      />
+    <ImageModalProvider>
+      <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-[#0a0a0a]' : 'bg-white'}`}>
+        
+        {/* Scroll Progress Bar */}
+        <motion.div
+          className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary transform origin-left z-[100]"
+          style={{ scaleX }}
+        />
 
-      {isAdminPath ? (
-        <Admin isAdminPath={true} />
-      ) : (
-        <>
-          <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
-          <main>
-            <Hero />
-            <About />
-            <Skills />
-            <Certificate />
-            <Projects />
-            <Experience darkMode={darkMode} />
-            <Education darkMode={darkMode} />
-            <Achievements />
-            <Contact />
-          </main>
-          <Admin isAdminPath={false} />
-          <Footer />
-        </>
-      )}
-    </div>
+        {isAdminPath ? (
+          <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-[#0b0f19] text-white">Loading Admin...</div>}>
+            <Admin isAdminPath={true} />
+          </Suspense>
+        ) : (
+          <>
+            <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
+            <main>
+              <Hero />
+              <About />
+              <Suspense fallback={<SectionSkeleton />}>
+                <Skills />
+              </Suspense>
+              <Suspense fallback={<SectionSkeleton />}>
+                <Certificate />
+              </Suspense>
+              <Suspense fallback={<SectionSkeleton />}>
+                <Projects />
+              </Suspense>
+              <Suspense fallback={<SectionSkeleton />}>
+                <Experience darkMode={darkMode} />
+              </Suspense>
+              <Suspense fallback={<SectionSkeleton />}>
+                <Education darkMode={darkMode} />
+              </Suspense>
+              <Suspense fallback={<SectionSkeleton />}>
+                <Achievements />
+              </Suspense>
+              <Suspense fallback={<SectionSkeleton />}>
+                <Contact />
+              </Suspense>
+            </main>
+            <Suspense fallback={null}>
+              <Admin isAdminPath={false} />
+            </Suspense>
+            <Footer />
+          </>
+        )}
+        
+        <ImageModal />
+      </div>
+    </ImageModalProvider>
   );
 }
 

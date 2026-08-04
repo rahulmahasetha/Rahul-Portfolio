@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { memo } from 'react';
+import { usePortfolioData } from '../hooks/usePortfolioData';
+import { useImageModal } from '../contexts/ImageModalContext';
 
 interface ExperienceItem {
   _id: string;
@@ -12,22 +14,11 @@ interface ExperienceItem {
   imageUrl?: string;
 }
 
-export default function Experience({ darkMode }: { darkMode: boolean }) {
-  const [items, setItems] = useState<ExperienceItem[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/experience');
-        if (!res.ok) return;
-        const data = await res.json();
-        setItems(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load experience', err);
-      }
-    };
-    load();
-  }, []);
+const Experience = memo(function Experience({ darkMode }: { darkMode: boolean }) {
+  const { data, isLoading } = usePortfolioData();
+  const { openImage } = useImageModal();
+  const items: ExperienceItem[] = data?.experience || [];
+  const loading = isLoading;
 
   return (
     <section id="experience" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
@@ -69,9 +60,12 @@ export default function Experience({ darkMode }: { darkMode: boolean }) {
                   </ul>
                   {item.imageUrl && (
                     <div className="mt-6">
-                      <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${item.imageUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-800 bg-transparent px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors hover:bg-gray-100 dark:hover:bg-gray-900">
+                      <button 
+                        onClick={() => openImage(item.imageUrl || '', item.projectName)} 
+                        className="inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-800 bg-transparent px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors hover:bg-gray-100 dark:hover:bg-gray-900"
+                      >
                         View Certificate / Image
-                      </a>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -82,4 +76,6 @@ export default function Experience({ darkMode }: { darkMode: boolean }) {
       </div>
     </section>
   );
-}
+});
+
+export default Experience;

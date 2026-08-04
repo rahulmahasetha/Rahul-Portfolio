@@ -1,29 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
 import { TypeAnimation } from 'react-type-animation';
 import { Mail, Code2, Download } from 'lucide-react';
 import { FaGithub, FaLinkedin } from 'react-icons/fa';
 import profilePic from '../assets/Rahul Mahaseth.png';
+import { usePortfolioData } from '../hooks/usePortfolioData';
+import { useImageModal } from '../contexts/ImageModalContext';
 
-export default function Hero() {
-  const [resumeUrl, setResumeUrl] = useState('');
+const Hero = memo(function Hero() {
+  const { data } = usePortfolioData();
+  const { openImage } = useImageModal();
+  const resume = data?.resume;
+  const resumeUrl = resume?.url ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resume.url}` : '#';
 
-  useEffect(() => {
-    const fetchResume = async () => {
-      try {
-        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/resume');
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.url) {
-            setResumeUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${data.url}`);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load resume', err);
-      }
-    };
-    fetchResume();
-  }, []);
   return (
     <section id="home" className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
 
@@ -120,17 +109,20 @@ export default function Hero() {
         </motion.div>
 
         <motion.div
-          className="flex-1 w-full max-w-md relative"
+          className="flex-1 w-full max-w-md relative cursor-pointer"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.2 }}
+          onClick={() => openImage(profilePic, "Rahul Mahaseth")}
         >
-          <div className="relative w-full aspect-square rounded-full border-2 border-primary/20 p-4">
+          <div className="relative w-full aspect-square rounded-full border-2 border-primary/20 p-4 hover:border-primary/50 transition-colors duration-300">
             <div className="w-full h-full rounded-full overflow-hidden border-4 border-white dark:border-gray-800 shadow-xl relative bg-primary/10 p-1">
               <img
                 src={profilePic}
                 alt="Rahul Mahaseth"
-                className="w-full h-full object-cover rounded-full bg-white dark:bg-gray-900"
+                className="w-full h-full object-cover rounded-full bg-white dark:bg-gray-900 transition-transform duration-300 hover:scale-110"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </div>
@@ -138,4 +130,6 @@ export default function Hero() {
       </div>
     </section>
   );
-}
+});
+
+export default Hero;

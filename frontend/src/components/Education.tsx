@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { memo } from 'react';
+import { usePortfolioData } from '../hooks/usePortfolioData';
 
 interface EducationItem {
   _id: string;
@@ -11,22 +12,10 @@ interface EducationItem {
   percentage: string;
 }
 
-export default function Education({ darkMode }: { darkMode: boolean }) {
-  const [items, setItems] = useState<EducationItem[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/education');
-        if (!res.ok) return;
-        const data = await res.json();
-        setItems(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load education', err);
-      }
-    };
-    load();
-  }, []);
+const Education = memo(function Education({ darkMode }: { darkMode: boolean }) {
+  const { data, isLoading } = usePortfolioData();
+  const items: EducationItem[] = data?.education || [];
+  const loading = isLoading;
 
   return (
     <section id="education" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
@@ -66,4 +55,6 @@ export default function Education({ darkMode }: { darkMode: boolean }) {
       </div>
     </section>
   );
-}
+});
+
+export default Education;

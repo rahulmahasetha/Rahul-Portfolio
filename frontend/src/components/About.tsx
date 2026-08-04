@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
+import { usePortfolioData } from '../hooks/usePortfolioData';
 
 interface AboutItem {
   _id: string;
@@ -15,35 +16,28 @@ interface StatItem {
   iconUrl?: string;
 }
 
-export default function About() {
-  const [aboutItems, setAboutItems] = useState<AboutItem[]>([]);
+const About = memo(function About() {
+  const { data, isLoading } = usePortfolioData();
+  const aboutItems: AboutItem[] = data?.about || [];
+
   const [stats, setStats] = useState<StatItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchContent = async () => {
+    const fetchStats = async () => {
       try {
-        const [aboutRes, statsRes] = await Promise.all([
-          fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/about'),
-          fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/site/stats')
-        ]);
-
-        if (aboutRes.ok) {
-          const data = await aboutRes.json();
-          setAboutItems(Array.isArray(data) ? data : []);
-        }
-        if (statsRes.ok) {
-          const data = await statsRes.json();
+        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/site/stats');
+        if (res.ok) {
+          const data = await res.json();
           setStats(Array.isArray(data) ? data : []);
         }
       } catch (err) {
-        console.error('Failed to load about content', err);
-      } finally {
-        setLoading(false);
+        console.error('Failed to load stats', err);
       }
     };
-    fetchContent();
+    fetchStats();
   }, []);
+
+  const loading = isLoading;
 
   return (
     <section id="about" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
@@ -110,4 +104,6 @@ export default function About() {
       </div>
     </section>
   );
-}
+});
+
+export default About;

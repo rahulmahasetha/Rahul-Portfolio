@@ -4,9 +4,15 @@ const cors = require('cors');
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+const NodeCache = require('node-cache');
+
+const portfolioCache = new NodeCache({ stdTTL: 600 });
+const invalidatePortfolioCache = () => portfolioCache.del('portfolioData');
 
 const Contact = require('./models/Contact');
 const Certificate = require('./models/Certificate');
+const AcademicCertificate = require('./models/AcademicCertificate');
 const Skill = require('./models/Skill');
 const Project = require('./models/Project');
 const Achievement = require('./models/Achievement');
@@ -23,11 +29,129 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const morgan = require('morgan');
+const xss = require('xss');
+const crypto = require('crypto');
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Trust one hop of reverse proxy (nginx, Cloudflare, etc.) so req.ip is populated correctly
+app.set('trust proxy', 1);
+
+/**
+ * getClientIp — returns the real client IP.
+ * Handles comma-separated X-Forwarded-For lists and strips port / IPv6 prefix.
+ */
+const getClientIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  let ip;
+  if (forwarded) {
+    // x-forwarded-for can be "client, proxy1, proxy2" — take the leftmost (real client)
+    ip = forwarded.split(',')[0].trim();
+  } else {
+    ip = req.ip || req.socket.remoteAddress || '';
+  }
+  // Strip IPv6-mapped IPv4 prefix (::ffff:1.2.3.4 → 1.2.3.4)
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+  // Convert IPv6 localhost to IPv4
+  if (ip === '::1') ip = '127.0.0.1';
+  return ip || 'unknown';
+};
+
+app.disable('x-powered-by');
+
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "http://localhost:5001", process.env.FRONTEND_URL].filter(Boolean),
+      connectSrc: ["'self'", "http://localhost:5001", process.env.FRONTEND_URL].filter(Boolean),
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+// Additional Security Headers
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    if (req.headers['x-forwarded-proto'] !== 'https' && req.hostname !== 'localhost') {
+      return res.redirect(`https://${req.hostname}${req.url}`);
+    }
+  }
+  next();
+});
+
+// Custom Injection & HPP Guard for Express 5
+const sanitizeObj = (obj) => {
+  for (let key in obj) {
+    if (typeof key === 'string' && (key.startsWith('$') || key.includes('.'))) {
+      delete obj[key];
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      sanitizeObj(obj[key]);
+    } else if (typeof obj[key] === 'string') {
+      obj[key] = xss(obj[key]);
+    }
+  }
+};
+
+app.use((req, res, next) => {
+  if (req.body) sanitizeObj(req.body);
+  if (req.params) sanitizeObj(req.params);
+  if (req.query) {
+    const keys = Object.keys(req.query);
+    for (let key of keys) {
+      if (key.startsWith('$') || key.includes('.')) {
+        delete req.query[key];
+      } else {
+        if (Array.isArray(req.query[key])) {
+          req.query[key] = req.query[key][req.query[key].length - 1]; // HPP protection
+        }
+        if (typeof req.query[key] === 'string') {
+          req.query[key] = xss(req.query[key]); // XSS protection
+        }
+      }
+    }
+  }
+  next();
+});
+
+app.use(cookieParser());
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+// CORS
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+// Body parser
+app.use(express.json({ limit: '10kb' }));
+app.use(compression());
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -36,16 +160,97 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+const { v4: uuidv4 } = require('uuid');
+const fileType = require('file-type');
+
 // Multer config
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/');
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
+    const ext = path.extname(file.originalname);
+    cb(null, uuidv4() + ext);
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+const validateUpload = async (req, res, next) => {
+  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+  
+  const validateFile = async (file) => {
+    const buffer = fs.readFileSync(file.path);
+    const type = await fileType.fromBuffer(buffer);
+    if (!type || !allowedMimeTypes.includes(type.mime)) {
+      fs.unlinkSync(file.path);
+      throw new Error('Invalid file type detected by magic bytes.');
+    }
+  };
+
+  try {
+    if (req.file) {
+      await validateFile(req.file);
+    }
+    if (req.files) {
+      for (const key in req.files) {
+        for (const file of req.files[key]) {
+          await validateFile(file);
+        }
+      }
+    }
+    next();
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    if (req.files) {
+      for (const key in req.files) {
+        for (const file of req.files[key]) {
+          if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        }
+      }
+    }
+    res.status(400).json({ error: err.message || 'Invalid file upload' });
+  }
+};
+
+
+const sharp = require('sharp');
+const optimizeUploads = async (req, res, next) => {
+  try {
+    const processFile = async (file) => {
+      if (!file.mimetype.startsWith('image/')) return;
+      if (file.mimetype === 'image/gif') return; // Skip gifs
+      const originalPath = file.path;
+      const ext = require('path').extname(originalPath);
+      // Replace the last occurrence of the extension with _original+extension
+      const newOriginalPath = originalPath.substring(0, originalPath.lastIndexOf(ext)) + '_original' + ext;
+      
+      fs.renameSync(originalPath, newOriginalPath);
+      
+      await sharp(newOriginalPath)
+        .resize({ width: 1920, withoutEnlargement: true })
+        .jpeg({ quality: 80, force: false })
+        .png({ quality: 80, force: false })
+        .webp({ quality: 80, force: false })
+        .toFile(originalPath);
+    };
+
+    if (req.file) await processFile(req.file);
+    if (req.files) {
+      for (const key in req.files) {
+        for (const file of req.files[key]) {
+          await processFile(file);
+        }
+      }
+    }
+    next();
+  } catch (err) {
+    console.error('Image optimization failed:', err);
+    next(err);
+  }
+};
 
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/portfolio';
@@ -54,7 +259,236 @@ mongoose.connect(MONGODB_URI)
   .then(() => console.log('Successfully connected to MongoDB.'))
   .catch((error) => console.error('MongoDB connection error:', error));
 
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const useragent = require('express-useragent');
+const geoip = require('geoip-lite');
+const Admin = require('./models/Admin');
+const SecurityLog = require('./models/SecurityLog');
+const AuditLog = require('./models/AuditLog');
+
+app.use(useragent.express());
+
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback_key';
+
+// /api/auth/login
+app.post('/api/auth/login', upload.single('snapshot'), validateUpload, optimizeUploads, async (req, res) => {
+  try {
+    const { password } = req.body;
+    const ip = getClientIp(req);
+    const geo = geoip.lookup(ip);
+    
+    let admin = await Admin.findOne();
+    if (!admin) {
+      // If no admin exists, create one with default password
+      const hashed = await bcrypt.hash('Raj Mahaseth@123', 10);
+      admin = new Admin({ email: 'admin@example.com', password: hashed });
+      await admin.save();
+    }
+
+    const logEntry = new SecurityLog({
+      email: admin.email,
+      ip,
+      browser: req.useragent?.browser,
+      os: req.useragent?.os,
+      device: req.useragent?.isMobile ? 'Mobile' : 'Desktop',
+      location: geo ? { country: geo.country, region: geo.region, city: geo.city, ll: geo.ll } : undefined,
+    });
+
+    if (req.file) {
+      logEntry.snapshotUrl = `/uploads/${req.file.filename}`;
+    }
+
+    if (admin.lockUntil && admin.lockUntil > Date.now()) {
+      logEntry.status = 'failure';
+      await logEntry.save();
+      return res.status(403).json({ error: 'Account locked. Try again later.' });
+    }
+
+    const isMatch = await bcrypt.compare(password || '', admin.password);
+    if (!isMatch) {
+      admin.loginAttempts += 1;
+      if (admin.loginAttempts >= 5) {
+        admin.lockUntil = Date.now() + 15 * 60 * 1000; // 15 mins
+      }
+      await admin.save();
+      
+      logEntry.status = 'failure';
+      await logEntry.save();
+      
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    // Success
+    admin.loginAttempts = 0;
+    admin.lockUntil = undefined;
+    await admin.save();
+
+    // Check if new device
+    const pastLogins = await SecurityLog.find({ 
+      ip, browser: logEntry.browser, status: 'success' 
+    });
+    logEntry.isNewDevice = pastLogins.length === 0;
+    logEntry.status = 'success';
+    await logEntry.save();
+
+    const token = jwt.sign({ email: admin.email }, JWT_SECRET, { expiresIn: '1h' });
+    
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 3600000,
+      path: '/'
+    });
+
+    res.json({ message: 'Logged in successfully', isNewDevice: logEntry.isNewDevice });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token', { 
+    path: '/',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  });
+  res.json({ message: 'Logged out' });
+});
+
+app.get('/api/auth/check', (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.json({ authenticated: false });
+  try {
+    jwt.verify(token, JWT_SECRET);
+    res.json({ authenticated: true });
+  } catch (err) {
+    res.json({ authenticated: false });
+  }
+});
+
+// CSRF Token Route
+app.get('/api/auth/csrf-token', (req, res) => {
+  const token = crypto.randomBytes(32).toString('hex');
+  res.cookie('csrfToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 3600000,
+    path: '/'
+  });
+  res.json({ csrfToken: token });
+});
+
+// Middleware for Auth
+const verifyAdmin = (req, res, next) => {
+  const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.adminEmail = decoded.email;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Middleware for Audit
+const auditLog = async (req, res, next) => {
+  res.on('finish', async () => {
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      let action = 'UNKNOWN';
+      if (req.method === 'POST') action = 'CREATE';
+      else if (req.method === 'PUT') action = 'UPDATE';
+      else if (req.method === 'DELETE') action = 'DELETE';
+      
+      const parts = req.path.split('/');
+      const entityType = parts[2] || 'UNKNOWN';
+      const entityId = parts[3];
+
+      try {
+        await AuditLog.create({
+          action,
+          entityType,
+          entityId,
+          adminEmail: req.adminEmail,
+          ip: getClientIp(req)
+        });
+      } catch (err) {
+        console.error('Failed to create audit log:', err);
+      }
+    }
+  });
+  next();
+};
+
+// Apply auth and audit globally to modifying routes, EXCEPT /api/auth
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/auth')) return next();
+  if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+    // CSRF Protection
+    const tokenFromCookie = req.cookies?.csrfToken;
+    const tokenFromHeader = req.headers['x-csrf-token'];
+    if (!tokenFromCookie || !tokenFromHeader || tokenFromCookie !== tokenFromHeader) {
+      return res.status(403).json({ error: 'CSRF token validation failed' });
+    }
+    return verifyAdmin(req, res, () => {
+      return auditLog(req, res, next);
+    });
+  }
+  next();
+});
+
 // Routes
+
+app.get('/api/portfolio', async (req, res) => {
+  try {
+    const cachedData = portfolioCache.get('portfolioData');
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    const [
+      skills,
+      projects,
+      certificates,
+      achievements,
+      experience,
+      education,
+      about,
+      resume
+    ] = await Promise.all([
+      Skill.find({ isDeleted: false }).sort({ displayOrder: 1, category: 1, name: 1 }).lean(),
+      Project.find().sort({ order: 1, createdAt: -1 }).lean(),
+      Certificate.find().sort({ issueDate: -1 }).lean(),
+      Achievement.find().sort({ createdAt: -1 }).lean(),
+      Experience.find().sort({ startDate: -1 }).lean(),
+      Education.find().sort({ startYear: -1 }).lean(),
+      About.find().sort({ order: 1, createdAt: 1 }).lean(),
+      Resume.findOne().sort({ createdAt: -1 }).lean()
+    ]);
+
+    const portfolioData = {
+      skills,
+      projects,
+      certificates,
+      achievements,
+      experience,
+      education,
+      about,
+      resume
+    };
+
+    portfolioCache.set('portfolioData', portfolioData);
+    res.json(portfolioData);
+  } catch (error) {
+    console.error('Error fetching portfolio data:', error);
+    res.status(500).json({ error: 'Failed to fetch portfolio data' });
+  }
+});
+
 // Rate Limiter for contact form
 const contactRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -152,7 +586,7 @@ app.get('/api/certificates', async (req, res) => {
 });
 
 // Add new certificate (Admin)
-app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), async (req, res) => {
+app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), optimizeUploads, async (req, res) => {
   try {
     const { title, category, certificateType, organization, issueDate, certificateId, description } = req.body;
     
@@ -186,6 +620,7 @@ app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { n
     });
 
     await newCertificate.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'Certificate added successfully', certificate: newCertificate });
   } catch (error) {
     console.error('Error adding certificate:', error);
@@ -194,7 +629,7 @@ app.post('/api/certificates', upload.fields([{ name: 'image', maxCount: 1 }, { n
 });
 
 // Update certificate
-app.put('/api/certificates/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), async (req, res) => {
+app.put('/api/certificates/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), optimizeUploads, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, category, certificateType, organization, issueDate, certificateId, description } = req.body;
@@ -225,6 +660,7 @@ app.put('/api/certificates/:id', upload.fields([{ name: 'image', maxCount: 1 }, 
     certificate.description = description;
 
     await certificate.save();
+    invalidatePortfolioCache();
     res.json({ message: 'Certificate updated successfully', certificate });
   } catch (error) {
     console.error('Error updating certificate:', error);
@@ -240,10 +676,139 @@ app.delete('/api/certificates/:id', async (req, res) => {
     if (!certificate) {
       return res.status(404).json({ error: 'Certificate not found' });
     }
+    invalidatePortfolioCache();
     res.json({ message: 'Certificate deleted successfully' });
   } catch (error) {
     console.error('Error deleting certificate:', error);
     res.status(500).json({ error: 'Failed to delete certificate' });
+  }
+});
+
+// --- Vault Verification ---
+app.post('/api/vault/verify', verifyAdmin, async (req, res) => {
+  try {
+    const { password } = req.body;
+    const admin = await Admin.findOne();
+    if (!admin) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (!admin.vaultPassword) {
+      if (password === '#rahul@mahaseth@123') return res.json({ success: true });
+      return res.status(401).json({ error: 'Incorrect vault password' });
+    }
+
+    const match = await bcrypt.compare(password, admin.vaultPassword);
+    if (match) return res.json({ success: true });
+    return res.status(401).json({ error: 'Incorrect vault password' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/vault/change', verifyAdmin, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const admin = await Admin.findOne();
+    if (!admin) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (!admin.vaultPassword) {
+      if (oldPassword !== '#rahul@mahaseth@123') return res.status(401).json({ error: 'Incorrect old password' });
+    } else {
+      const match = await bcrypt.compare(oldPassword, admin.vaultPassword);
+      if (!match) return res.status(401).json({ error: 'Incorrect old password' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    admin.vaultPassword = await bcrypt.hash(newPassword, salt);
+    await admin.save();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Academic Certificates API ---
+app.get('/api/academic-certificates', verifyAdmin, async (req, res) => {
+  try {
+    const certs = await AcademicCertificate.find().sort({ createdAt: -1 });
+    res.json(certs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch academic certificates' });
+  }
+});
+
+app.post('/api/academic-certificates', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'pdfs', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
+  try {
+    const { title, category } = req.body;
+    const images = [];
+    if (req.files && req.files.images) {
+      for (const file of req.files.images) {
+        images.push(`/uploads/${file.filename}`);
+      }
+    }
+    const pdfs = [];
+    if (req.files && req.files.pdfs) {
+      for (const file of req.files.pdfs) {
+        pdfs.push({ name: file.originalname, url: `/uploads/${file.filename}` });
+      }
+    }
+
+    const cert = new AcademicCertificate({ title, category, images, pdfs });
+    await cert.save();
+    res.json({ message: 'Created successfully', cert });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create academic certificate' });
+  }
+});
+
+app.put('/api/academic-certificates/:id', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'pdfs', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, category, retainedImages, retainedPdfs } = req.body;
+    
+    let images = [];
+    if (retainedImages) {
+      images = Array.isArray(retainedImages) ? retainedImages : [retainedImages];
+    }
+    if (req.files && req.files.images) {
+      for (const file of req.files.images) {
+        images.push(`/uploads/${file.filename}`);
+      }
+    }
+
+    let pdfs = [];
+    if (retainedPdfs) {
+      try {
+        const parsed = JSON.parse(retainedPdfs);
+        pdfs = Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        // Fallback if not valid JSON
+      }
+    }
+    if (req.files && req.files.pdfs) {
+      for (const file of req.files.pdfs) {
+        pdfs.push({ name: file.originalname, url: `/uploads/${file.filename}` });
+      }
+    }
+
+    const cert = await AcademicCertificate.findByIdAndUpdate(
+      id, 
+      { title, category, images, pdfs, updatedAt: Date.now() },
+      { new: true }
+    );
+    res.json({ message: 'Updated successfully', cert });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update academic certificate' });
+  }
+});
+
+app.delete('/api/academic-certificates/:id', async (req, res) => {
+  try {
+    await AcademicCertificate.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete' });
   }
 });
 
@@ -260,7 +825,7 @@ app.get('/api/skills', async (req, res) => {
   }
 });
 
-app.post('/api/skills', upload.single('icon'), async (req, res) => {
+app.post('/api/skills', upload.single('icon'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { name, category, level, description, displayOrder, iconUrl } = req.body;
     if (!name || !category || level == null) {
@@ -282,6 +847,7 @@ app.post('/api/skills', upload.single('icon'), async (req, res) => {
     });
 
     await newSkill.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'Skill added successfully', skill: newSkill });
   } catch (error) {
     console.error('Error adding skill:', error);
@@ -289,7 +855,7 @@ app.post('/api/skills', upload.single('icon'), async (req, res) => {
   }
 });
 
-app.put('/api/skills/:id', upload.single('icon'), async (req, res) => {
+app.put('/api/skills/:id', upload.single('icon'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, category, level, description, displayOrder, iconUrl } = req.body;
@@ -312,6 +878,7 @@ app.put('/api/skills/:id', upload.single('icon'), async (req, res) => {
     skill.description = description || skill.description;
 
     await skill.save();
+    invalidatePortfolioCache();
     res.json({ message: 'Skill updated successfully', skill });
   } catch (error) {
     console.error('Error updating skill:', error);
@@ -329,6 +896,7 @@ app.delete('/api/skills/:id', async (req, res) => {
     skill.isDeleted = true;
     skill.deletedAt = new Date();
     await skill.save();
+    invalidatePortfolioCache();
     res.json({ message: 'Skill deleted successfully' });
   } catch (error) {
     console.error('Error deleting skill:', error);
@@ -346,6 +914,7 @@ app.post('/api/skills/:id/restore', async (req, res) => {
     skill.isDeleted = false;
     skill.deletedAt = undefined;
     await skill.save();
+    invalidatePortfolioCache();
     res.json({ message: 'Skill restored successfully', skill });
   } catch (error) {
     console.error('Error restoring skill:', error);
@@ -364,13 +933,18 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
-app.post('/api/projects', upload.single('image'), async (req, res) => {
+app.post('/api/projects', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'gallery', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { title, problem, features, tech, github, demo, description, order } = req.body;
     let imageUrl = req.body.imageUrl || '';
+    let images = [];
 
-    if (req.file) {
-      imageUrl = `/uploads/${req.file.filename}`;
+    if (req.files && req.files.image && req.files.image.length > 0) {
+      imageUrl = `/uploads/${req.files.image[0].filename}`;
+    }
+    
+    if (req.files && req.files.gallery) {
+      images = req.files.gallery.map(file => `/uploads/${file.filename}`);
     }
 
     let parsedFeatures = [];
@@ -386,6 +960,7 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
     const newProject = new Project({
       title,
       imageUrl,
+      images,
       problem: problem || '',
       features: parsedFeatures,
       tech: tech ? tech.split(',').map((item) => item.trim()).filter(Boolean) : [],
@@ -396,6 +971,7 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
     });
 
     await newProject.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'Project added successfully', project: newProject });
   } catch (error) {
     console.error('Error adding project:', error);
@@ -403,7 +979,7 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
   }
 });
 
-app.put('/api/projects/:id', upload.single('image'), async (req, res) => {
+app.put('/api/projects/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'gallery', maxCount: 10 }]), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, problem, features, tech, github, demo, description, order } = req.body;
@@ -413,11 +989,33 @@ app.put('/api/projects/:id', upload.single('image'), async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    if (req.file) {
-      project.imageUrl = `/uploads/${req.file.filename}`;
+    if (req.files && req.files.image && req.files.image.length > 0) {
+      project.imageUrl = `/uploads/${req.files.image[0].filename}`;
     } else if (req.body.imageUrl) {
       project.imageUrl = req.body.imageUrl;
     }
+    
+    // Existing images that the user wants to keep
+    let existingImages = [];
+    if (req.body.existingImages) {
+      try {
+        existingImages = JSON.parse(req.body.existingImages);
+      } catch (e) {
+        existingImages = typeof req.body.existingImages === 'string' ? [req.body.existingImages] : [];
+      }
+    } else if (req.body.existingImages === '[]') {
+      existingImages = [];
+    } else if (req.body.existingImages === undefined) {
+      existingImages = project.images;
+    }
+
+    // New uploaded images
+    let newGalleryImages = [];
+    if (req.files && req.files.gallery) {
+      newGalleryImages = req.files.gallery.map(file => `/uploads/${file.filename}`);
+    }
+
+    project.images = [...existingImages, ...newGalleryImages];
 
     let parsedFeatures = project.features;
     if (features) {
@@ -439,6 +1037,7 @@ app.put('/api/projects/:id', upload.single('image'), async (req, res) => {
     project.order = order !== undefined ? parseInt(order, 10) : project.order;
 
     await project.save();
+    invalidatePortfolioCache();
     res.json({ message: 'Project updated successfully', project });
   } catch (error) {
     console.error('Error updating project:', error);
@@ -453,10 +1052,57 @@ app.delete('/api/projects/:id', async (req, res) => {
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
+    invalidatePortfolioCache();
     res.json({ message: 'Project deleted successfully' });
   } catch (error) {
     console.error('Error deleting project:', error);
     res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+
+const archiver = require('archiver');
+
+app.get('/api/projects/:id/download-images', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const allImages = [];
+    if (project.imageUrl) allImages.push(project.imageUrl);
+    if (project.images && project.images.length > 0) {
+      allImages.push(...project.images);
+    }
+
+    if (allImages.length === 0) {
+      return res.status(404).json({ error: 'No images found for this project' });
+    }
+
+    res.attachment(`${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_images.zip`);
+    const archive = archiver('zip', { zlib: { level: 0 } }); // No compression needed for JPEG/PNG
+    archive.on('error', (err) => { throw err; });
+    archive.pipe(res);
+
+    for (let i = 0; i < allImages.length; i++) {
+      let imageUrl = allImages[i];
+      // get local path
+      let localPath = path.join(__dirname, imageUrl.replace('/uploads', 'uploads'));
+      let ext = path.extname(localPath);
+      let originalPath = localPath.substring(0, localPath.lastIndexOf(ext)) + '_original' + ext;
+      
+      let fileToZip = fs.existsSync(originalPath) ? originalPath : (fs.existsSync(localPath) ? localPath : null);
+      if (fileToZip) {
+        archive.file(fileToZip, { name: `image_${i + 1}${path.extname(fileToZip)}` });
+      }
+    }
+
+    await archive.finalize();
+  } catch (error) {
+    console.error('Error downloading images zip:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate zip file' });
+    }
   }
 });
 
@@ -556,7 +1202,7 @@ app.get('/api/experience', async (req, res) => {
   }
 });
 
-app.post('/api/experience', upload.single('image'), async (req, res) => {
+app.post('/api/experience', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const expData = { ...req.body };
     if (req.file) {
@@ -564,6 +1210,7 @@ app.post('/api/experience', upload.single('image'), async (req, res) => {
     }
     const newExp = new Experience(expData);
     await newExp.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'Experience added', experience: newExp });
   } catch (error) {
     console.error('Error adding experience:', error);
@@ -571,7 +1218,7 @@ app.post('/api/experience', upload.single('image'), async (req, res) => {
   }
 });
 
-app.put('/api/experience/:id', upload.single('image'), async (req, res) => {
+app.put('/api/experience/:id', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { id } = req.params;
     const expData = { ...req.body };
@@ -580,6 +1227,7 @@ app.put('/api/experience/:id', upload.single('image'), async (req, res) => {
     }
     const exp = await Experience.findByIdAndUpdate(id, expData, { new: true });
     if (!exp) return res.status(404).json({ error: 'Experience not found' });
+    invalidatePortfolioCache();
     res.json({ message: 'Experience updated', experience: exp });
   } catch (error) {
     console.error('Error updating experience:', error);
@@ -592,6 +1240,7 @@ app.delete('/api/experience/:id', async (req, res) => {
     const { id } = req.params;
     const exp = await Experience.findByIdAndDelete(id);
     if (!exp) return res.status(404).json({ error: 'Experience not found' });
+    invalidatePortfolioCache();
     res.json({ message: 'Experience deleted' });
   } catch (error) {
     console.error('Error deleting experience:', error);
@@ -614,6 +1263,7 @@ app.post('/api/education', async (req, res) => {
   try {
     const newEdu = new Education(req.body);
     await newEdu.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'Education added', education: newEdu });
   } catch (error) {
     console.error('Error adding education:', error);
@@ -626,6 +1276,7 @@ app.put('/api/education/:id', async (req, res) => {
     const { id } = req.params;
     const edu = await Education.findByIdAndUpdate(id, req.body, { new: true });
     if (!edu) return res.status(404).json({ error: 'Education not found' });
+    invalidatePortfolioCache();
     res.json({ message: 'Education updated', education: edu });
   } catch (error) {
     console.error('Error updating education:', error);
@@ -638,6 +1289,7 @@ app.delete('/api/education/:id', async (req, res) => {
     const { id } = req.params;
     const edu = await Education.findByIdAndDelete(id);
     if (!edu) return res.status(404).json({ error: 'Education not found' });
+    invalidatePortfolioCache();
     res.json({ message: 'Education deleted' });
   } catch (error) {
     console.error('Error deleting education:', error);
@@ -736,7 +1388,7 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/achievements', upload.single('image'), async (req, res) => {
+app.post('/api/achievements', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { title, description, icon, color } = req.body;
     let imageUrl = req.body.imageUrl || '';
@@ -757,13 +1409,14 @@ app.post('/api/achievements', upload.single('image'), async (req, res) => {
     });
 
     await newAchievement.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'Achievement added successfully', achievement: newAchievement });
   } catch (error) {
     console.error('Error adding achievement:', error);
     res.status(500).json({ error: 'Failed to add achievement' });
   }
 });
-app.put('/api/achievements/:id', upload.single('image'), async (req, res) => {
+app.put('/api/achievements/:id', upload.single('image'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -776,6 +1429,7 @@ app.put('/api/achievements/:id', upload.single('image'), async (req, res) => {
       return res.status(404).json({ error: 'Achievement not found' });
     }
 
+    invalidatePortfolioCache();
     res.json({ message: 'Achievement updated successfully', achievement: updated });
   } catch (error) {
     console.error('Error updating achievement:', error);
@@ -790,6 +1444,7 @@ app.delete('/api/achievements/:id', async (req, res) => {
     if (!achievement) {
       return res.status(404).json({ error: 'Achievement not found' });
     }
+    invalidatePortfolioCache();
     res.json({ message: 'Achievement deleted successfully' });
   } catch (error) {
     console.error('Error deleting achievement:', error);
@@ -822,6 +1477,7 @@ app.post('/api/about', async (req, res) => {
     });
 
     await newAbout.save();
+    invalidatePortfolioCache();
     res.status(201).json({ message: 'About item added successfully', aboutItem: newAbout });
   } catch (error) {
     console.error('Error adding about item:', error);
@@ -844,6 +1500,7 @@ app.put('/api/about/:id', async (req, res) => {
     aboutItem.order = order != null ? Number(order) : aboutItem.order;
 
     await aboutItem.save();
+    invalidatePortfolioCache();
     res.json({ message: 'About item updated successfully', aboutItem });
   } catch (error) {
     console.error('Error updating about item:', error);
@@ -858,6 +1515,7 @@ app.delete('/api/about/:id', async (req, res) => {
     if (!aboutItem) {
       return res.status(404).json({ error: 'About item not found' });
     }
+    invalidatePortfolioCache();
     res.status(200).json({ message: 'About item deleted successfully' });
   } catch (error) {
     console.error('Error deleting about item:', error);
@@ -875,7 +1533,7 @@ app.get('/api/resume', async (req, res) => {
   }
 });
 
-app.post('/api/resume', upload.single('resume'), async (req, res) => {
+app.post('/api/resume', upload.single('resume'), validateUpload, optimizeUploads, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
@@ -893,6 +1551,7 @@ app.post('/api/resume', upload.single('resume'), async (req, res) => {
     });
 
     await newResume.save();
+    invalidatePortfolioCache();
     res.status(201).json(newResume);
   } catch (error) {
     console.error('Error uploading resume:', error);
@@ -904,6 +1563,7 @@ app.delete('/api/resume/:id', async (req, res) => {
   try {
     const resume = await Resume.findByIdAndDelete(req.params.id);
     if (!resume) return res.status(404).json({ error: 'Resume not found' });
+    invalidatePortfolioCache();
     res.status(200).json({ message: 'Resume deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete resume' });
@@ -911,6 +1571,45 @@ app.delete('/api/resume/:id', async (req, res) => {
 });
 
 // Visitor API routes
+app.get('/api/securityLogs', verifyAdmin, async (req, res) => {
+  try {
+    const logs = await SecurityLog.find().sort({ createdAt: -1 }).limit(100);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch security logs' });
+  }
+});
+
+app.post('/api/securityLogs/bulk-action', verifyAdmin, async (req, res) => {
+  try {
+    const { action, ids } = req.body;
+    if (!action || !ids || !Array.isArray(ids)) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+
+    if (action === 'archive') {
+      await SecurityLog.updateMany({ _id: { $in: ids } }, { $set: { isPermanent: true } });
+      res.json({ message: 'Logs archived permanently' });
+    } else if (action === 'delete') {
+      await SecurityLog.deleteMany({ _id: { $in: ids } });
+      res.json({ message: 'Logs deleted successfully' });
+    } else {
+      res.status(400).json({ error: 'Invalid action' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to perform bulk action' });
+  }
+});
+
+app.get('/api/auditLogs', verifyAdmin, async (req, res) => {
+  try {
+    const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+});
+
 app.get('/api/visitor/count', async (req, res) => {
   try {
     let visitor = await Visitor.findOne();
@@ -939,6 +1638,28 @@ app.post('/api/visitor/increment', async (req, res) => {
     console.error('Error incrementing visitor count:', error);
     res.status(500).json({ error: 'Failed to increment visitor count' });
   }
+});
+
+// Serve frontend in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    } else {
+      res.status(404).json({ error: 'API route not found' });
+    }
+  });
+}
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled Error:', err);
+  const status = err.statusCode || 500;
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Internal Server Error' 
+    : err.message || 'Internal Server Error';
+  res.status(status).json({ error: message });
 });
 
 // Start the server

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, Unlock, Download, Eye } from 'lucide-react';
+import { usePortfolioData } from '../hooks/usePortfolioData';
 
 interface CertificateData {
   _id: string;
@@ -17,10 +18,24 @@ interface CertificateData {
 
 const defaultLocked: string[] = [];
 
-export default function Certificate() {
-  const [certificates, setCertificates] = useState<CertificateData[]>([]);
+const Certificate = memo(function Certificate() {
+  const { data, isLoading } = usePortfolioData();
+  const certificates: CertificateData[] = data?.certificates || [];
+  const loading = isLoading;
+
+  const getDownloadUrl = (url: string | undefined) => {
+    if (!url) return '#';
+    if (url.endsWith('.pdf')) return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${url}`;
+    
+    const match = url.match(/(\.[\w\d_-]+)$/i);
+    if (match) {
+      const originalPath = url.substring(0, url.lastIndexOf(match[1])) + '_original' + match[1];
+      return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${originalPath}`;
+    }
+    return `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${url}`;
+  };
+
   const [unlockedCertificates, setUnlockedCertificates] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCertificate, setSelectedCertificate] = useState<CertificateData | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -28,7 +43,6 @@ export default function Certificate() {
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchCertificates();
     // Load unlocked certificates from localStorage
     const stored = localStorage.getItem('unlockedCertificates');
     if (stored) {
@@ -46,24 +60,6 @@ export default function Certificate() {
       }
     })();
   }, []);
-
-  const fetchCertificates = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/certificates');
-      if (!response.ok) {
-        throw new Error('Failed to fetch certificates');
-      }
-      const data = await response.json();
-      setCertificates(data);
-      setError('');
-    } catch (err) {
-      console.error('Error fetching certificates:', err);
-      setError('Failed to load certificates');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const isCertificateLocked = (certificateType: string): boolean => {
     return lockedTypes.some(type =>
@@ -193,7 +189,7 @@ export default function Certificate() {
                                 <button onClick={() => { setSelectedCertificate(cert); setShowModal(true); }} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center gap-1">
                                   <Eye className="w-4 h-4" /> View
                                 </button>
-                                <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${cert.pdfUrl || cert.imageUrl}`} download className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center gap-1">
+                                <a href={getDownloadUrl(cert.pdfUrl || cert.imageUrl)} download className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center gap-1">
                                   <Download className="w-4 h-4" /> Download
                                 </a>
                               </>
@@ -247,6 +243,8 @@ export default function Certificate() {
                 src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${selectedCertificate.imageUrl}`}
                 alt={selectedCertificate.title}
                 className="w-full object-contain mb-8 max-h-[60vh]"
+                loading="lazy"
+                decoding="async"
               />
               <div className="flex justify-between items-center">
                 <div>
@@ -254,7 +252,7 @@ export default function Certificate() {
                   <p className="text-gray-900 dark:text-white font-medium text-lg">{selectedCertificate.organization}</p>
                 </div>
                 <a
-                  href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${selectedCertificate.pdfUrl || selectedCertificate.imageUrl}`}
+                  href={getDownloadUrl(selectedCertificate.pdfUrl || selectedCertificate.imageUrl)}
                   download
                   className="inline-flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
                 >
@@ -267,4 +265,6 @@ export default function Certificate() {
       )}
     </section>
   );
-}
+});
+
+export default Certificate;

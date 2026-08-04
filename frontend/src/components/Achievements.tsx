@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Award, Star, Zap, Target, Circle } from 'lucide-react';
+import { usePortfolioData } from '../hooks/usePortfolioData';
 
 interface AchievementItem {
   _id: string;
@@ -19,55 +20,10 @@ const iconMap: Record<string, JSX.Element> = {
   Default: <Circle className="w-5 h-5 text-gray-500" />
 };
 
-const initialAchievements: AchievementItem[] = [
-  {
-    _id: 'hackathon',
-    title: 'Hackathon Winner',
-    description: 'Secured 1st place in National Level Smart India Hackathon 2024 out of 500+ participating teams.',
-    icon: 'Target',
-    color: 'from-blue-500 to-indigo-600'
-  },
-  {
-    _id: 'competitive',
-    title: 'Competitive Programming',
-    description: 'Global rank under 5000 in Google HashCode and top 10% in LeetCode weekly contests.',
-    icon: 'Star',
-    color: 'from-yellow-400 to-orange-500'
-  },
-  {
-    _id: 'opensource',
-    title: 'Open Source Contributor',
-    description: 'Merged 20+ PRs in popular open source repositories including React and TailwindCSS.',
-    icon: 'Award',
-    color: 'from-green-400 to-emerald-600'
-  },
-  {
-    _id: 'aws',
-    title: 'AWS Certified',
-    description: 'Achieved AWS Certified Solutions Architect credential with a perfect score in architecture design.',
-    icon: 'Zap',
-    color: 'from-pink-500 to-rose-600'
-  }
-];
-
-export default function Achievements() {
-  const [achievements, setAchievements] = useState<AchievementItem[]>(initialAchievements);
-
-  useEffect(() => {
-    const fetchAchievements = async () => {
-      try {
-        const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/achievements');
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setAchievements(data);
-        }
-      } catch (error) {
-        console.error('Error loading achievements', error);
-      }
-    };
-
-    fetchAchievements();
-  }, []);
+const Achievements = memo(function Achievements() {
+  const { data, isLoading } = usePortfolioData();
+  const achievements: AchievementItem[] = data?.achievements || [];
+  const loading = isLoading;
 
   return (
     <section id="achievements" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
@@ -114,4 +70,6 @@ export default function Achievements() {
       </div>
     </section>
   );
-}
+});
+
+export default Achievements;

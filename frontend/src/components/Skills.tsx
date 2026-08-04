@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
+import { usePortfolioData } from '../hooks/usePortfolioData';
 
 interface SkillItem {
   _id: string;
@@ -13,37 +14,23 @@ interface SkillCategory {
   skills: SkillItem[];
 }
 
-export default function Skills() {
-  const [skillCategories, setSkillCategories] = useState<SkillCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+const Skills = memo(function Skills() {
+  const { data, isLoading } = usePortfolioData();
+  const rawSkills = data?.skills || [];
+  const loading = isLoading;
 
-  useEffect(() => {
-    const fetchSkills = async () => {
-      try {
-        const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api/skills');
-        const skills = await response.json();
-        if (Array.isArray(skills) && skills.length > 0) {
-          const categories = skills.reduce<Record<string, SkillItem[]>>((acc, skill) => {
-            const key = skill.category || 'Other';
-            acc[key] = acc[key] || [];
-            acc[key].push(skill);
-            return acc;
-          }, {});
-
-          setSkillCategories(Object.keys(categories).map((title) => ({ title, skills: categories[title] })));
-        }
-      } catch (error) {
-        console.error('Error loading skills', error);
-      }
-      finally {
-        setLoading(false);
-      }
-    };
-
-    setLoading(true);
-    fetchSkills();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const skillCategories = useMemo(() => {
+    if (rawSkills.length > 0) {
+      const categories = rawSkills.reduce<Record<string, SkillItem[]>>((acc: Record<string, SkillItem[]>, skill: SkillItem) => {
+        const key = skill.category || 'Other';
+        acc[key] = acc[key] || [];
+        acc[key].push(skill);
+        return acc;
+      }, {});
+      return Object.keys(categories).map((title) => ({ title, skills: categories[title] }));
+    }
+    return [];
+  }, [rawSkills]);
 
   return (
     <section id="skills" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
@@ -95,4 +82,6 @@ export default function Skills() {
       </div>
     </section>
   );
-}
+});
+
+export default Skills;
