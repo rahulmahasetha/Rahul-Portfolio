@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, MapPin, Send, Loader2 } from 'lucide-react';
 import { FaGithub, FaLinkedin, FaTwitter } from 'react-icons/fa';
+import { SiLeetcode } from 'react-icons/si';
 
 export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,6 +110,7 @@ export default function Contact() {
                   {[
                     { icon: <FaGithub size={20} />, href: "https://github.com/rahulmahasetha", label: "GitHub" },
                     { icon: <FaLinkedin size={20} />, href: "https://www.linkedin.com/in/rahul-mahaseth-37651b291", label: "LinkedIn" },
+                    { icon: <SiLeetcode size={20} />, href: "https://leetcode.com/u/rahul_mahaseth7788/", label: "LeetCode" },
                     { icon: <FaTwitter size={20} />, href: "#", label: "Twitter" }
                   ].map((social, index) => (
                     <a

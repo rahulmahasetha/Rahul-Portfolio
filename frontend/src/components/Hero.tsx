@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { TypeAnimation } from 'react-type-animation';
 import { Mail, Code2, Download } from 'lucide-react';
 import { FaGithub, FaLinkedin } from 'react-icons/fa';
+import { SiLeetcode } from 'react-icons/si';
 import profilePic from '../assets/Rahul Mahaseth.png';
 import { usePortfolioData } from '../hooks/usePortfolioData';
 import { useImageModal } from '../contexts/ImageModalContext';
@@ -88,6 +89,7 @@ const Hero = memo(function Hero() {
             {[
               { icon: <FaGithub size={24} />, href: "https://github.com/rahulmahasetha", label: "GitHub" },
               { icon: <FaLinkedin size={24} />, href: "https://www.linkedin.com/in/rahul-mahaseth-37651b291", label: "LinkedIn" },
+              { icon: <SiLeetcode size={24} />, href: "https://leetcode.com/u/rahul_mahaseth7788/", label: "LeetCode" },
               { icon: <Mail size={24} />, href: "mailto:rahulmahaseth700@gmail.com", label: "Email" }
             ].map((social, index) => (
               <motion.a
