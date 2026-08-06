@@ -7,6 +7,7 @@ import { motion, useScroll, useSpring } from 'framer-motion';
 import { SectionSkeleton } from './components/SectionSkeleton';
 import { ImageModalProvider } from './contexts/ImageModalContext';
 import { ImageModal } from './components/ImageModal';
+import { IntroAnimation } from './components/IntroAnimation';
 
 const Skills = lazy(() => import('./components/Skills'));
 const Certificate = lazy(() => import('./components/Certificate'));
@@ -20,12 +21,21 @@ const Admin = lazy(() => import('./components/Admin/index'));
 function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [isAdminPath, setIsAdminPath] = useState(false);
+  const [introComplete, setIntroComplete] = useState(() => {
+    return sessionStorage.getItem('introPlayed') === 'true';
+  });
+
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
     restDelta: 0.001
   });
+
+  const handleIntroComplete = () => {
+    sessionStorage.setItem('introPlayed', 'true');
+    setIntroComplete(true);
+  };
 
   useEffect(() => {
     if (darkMode) {
@@ -42,7 +52,8 @@ function App() {
 
   return (
     <ImageModalProvider>
-      <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-[#0a0a0a]' : 'bg-white'}`}>
+      {!introComplete && <IntroAnimation onComplete={handleIntroComplete} />}
+      <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-[#0a0a0a]' : 'bg-white'} ${!introComplete ? 'h-screen overflow-hidden' : ''}`}>
         
         {/* Scroll Progress Bar */}
         <motion.div
