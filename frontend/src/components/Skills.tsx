@@ -1,6 +1,7 @@
 import { useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { usePortfolioData } from '../hooks/usePortfolioData';
+import { SkillsSkeleton } from './Skeletons';
 
 interface SkillItem {
   _id: string;
@@ -49,7 +50,7 @@ const Skills = memo(function Skills() {
 
         <div className="space-y-0">
           {loading && (
-            <div className="text-gray-500">Loading skills...</div>
+            <SkillsSkeleton />
           )}
 
           {!loading && skillCategories.length === 0 && (

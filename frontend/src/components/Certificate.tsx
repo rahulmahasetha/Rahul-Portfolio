@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, Unlock, Download, Eye } from 'lucide-react';
 import { usePortfolioData } from '../hooks/usePortfolioData';
+import { CertificateSkeleton } from './Skeletons';
 
 interface CertificateData {
   _id: string;
@@ -101,16 +102,6 @@ const Certificate = memo(function Certificate() {
     return acc;
   }, {} as Record<string, CertificateData[]>);
 
-  if (loading) {
-    return (
-      <section id="certificates" className="py-20 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-gray-500">Loading certificates...</div>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section id="certificates" className="py-8 relative bg-[#fafafa] dark:bg-[#0a0a0a]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -131,7 +122,9 @@ const Certificate = memo(function Certificate() {
         )}
 
         <div className="space-y-0">
-          {certificates.length === 0 ? (
+          {loading ? (
+            <CertificateSkeleton />
+          ) : certificates.length === 0 ? (
             <div className="text-gray-500">No certificates available yet.</div>
           ) : (
             Object.entries(groupedCertificates).map(([category, certs]) => (

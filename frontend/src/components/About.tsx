@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState, memo } from 'react';
 import { usePortfolioData } from '../hooks/usePortfolioData';
+import { AboutSkeleton } from './Skeletons';
 
 interface AboutItem {
   _id: string;
@@ -63,7 +64,7 @@ const About = memo(function About() {
             </div>
             <div className="md:w-3/4">
               {loading ? (
-                <p className="text-gray-500 text-sm">Loading...</p>
+                <AboutSkeleton />
               ) : aboutItems.length > 0 ? (
                 <div className="space-y-4">
                   {aboutItems.map((item) => (
