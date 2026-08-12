@@ -27,6 +27,7 @@ export default function AdminIndex({ isAdminPath }: { isAdminPath?: boolean }) {
   const [loginError,        setLoginError]        = useState('');
   const [activeSection,     setActiveSection]     = useState<SectionType>('dashboard');
   const [isLoggingIn,       setIsLoggingIn]       = useState(false);
+  const [capturedSnapshot,  setCapturedSnapshot]  = useState<Blob | null>(null);
 
   const videoRef       = useRef<HTMLVideoElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -123,30 +124,33 @@ export default function AdminIndex({ isAdminPath }: { isAdminPath?: boolean }) {
 
   if (!isAdminPath) return null;
 
-  // ── Login submit ────────────────────────────────────────────────────────────
-  const handlePasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!faceOk || !password || isLoggingIn) return;
-
-    setLoginError('');
-    setIsLoggingIn(true);
-
-    // Capture snapshot
-    let blob: Blob | null = null;
-    if (videoRef.current && videoRef.current.readyState >= 2) {
+  // ── Auto-capture photo when face is OK ──────────────────────────────────────
+  useEffect(() => {
+    if (faceOk && !capturedSnapshot && videoRef.current && videoRef.current.readyState >= 2) {
       const canvas = document.createElement('canvas');
       canvas.width  = videoRef.current.videoWidth  || 640;
       canvas.height = videoRef.current.videoHeight || 480;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(videoRef.current, 0, 0);
-        blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        canvas.toBlob((blob) => {
+          if (blob) setCapturedSnapshot(blob);
+        }, 'image/jpeg', 0.85);
       }
     }
+  }, [faceOk, capturedSnapshot]);
+
+  // ── Login submit ────────────────────────────────────────────────────────────
+  const handlePasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!capturedSnapshot || !password || isLoggingIn) return;
+
+    setLoginError('');
+    setIsLoggingIn(true);
 
     const fd = new FormData();
     fd.append('password', password);
-    if (blob) fd.append('snapshot', blob, 'snapshot.jpg');
+    fd.append('snapshot', capturedSnapshot, 'snapshot.jpg');
 
     try {
       const res = await fetch(
@@ -309,9 +313,9 @@ export default function AdminIndex({ isAdminPath }: { isAdminPath?: boolean }) {
             </div>
           </div>
 
-          {/* ── Password form — slides in when face is OK ── */}
+          {/* ── Password form — slides in when photo is captured ── */}
           <AnimatePresence>
-            {faceOk && (
+            {capturedSnapshot && (
               <motion.div
                 initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                 animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
@@ -366,9 +370,9 @@ export default function AdminIndex({ isAdminPath }: { isAdminPath?: boolean }) {
           </AnimatePresence>
 
           {/* Hint when face not detected */}
-          {!faceOk && !isLoading && (
+          {!capturedSnapshot && !isLoading && (
             <p className="text-center text-xs text-admin-text-secondary">
-              Look at your camera — the password field will appear once your face is detected.
+              Look at your camera — the password field will appear once your face is captured automatically.
             </p>
           )}
         </motion.div>
