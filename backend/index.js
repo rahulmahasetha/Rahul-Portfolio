@@ -80,44 +80,13 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
-// Additional Security Headers
+// Security: Additional headers
 app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
     if (req.headers['x-forwarded-proto'] !== 'https' && req.hostname !== 'localhost') {
       return res.redirect(`https://${req.hostname}${req.url}`);
-    }
-  }
-  next();
-});
-
-// Security: NoSQL Injection Guard
-app.use(mongoSanitize());
-
-// Custom Injection & HPP Guard for Express 5
-const sanitizeObj = (obj) => {
-  for (let key in obj) {
-    if (typeof obj[key] === 'object' && obj[key] !== null) {
-      sanitizeObj(obj[key]);
-    } else if (typeof obj[key] === 'string') {
-      obj[key] = xss(obj[key]);
-    }
-  }
-};
-
-app.use((req, res, next) => {
-  if (req.body) sanitizeObj(req.body);
-  if (req.params) sanitizeObj(req.params);
-  if (req.query) {
-    const keys = Object.keys(req.query);
-    for (let key of keys) {
-      if (Array.isArray(req.query[key])) {
-        req.query[key] = req.query[key][req.query[key].length - 1]; // HPP protection
-      }
-      if (typeof req.query[key] === 'string') {
-        req.query[key] = xss(req.query[key]); // XSS protection
-      }
     }
   }
   next();
@@ -163,6 +132,37 @@ app.use(cors({
 // Body parser
 app.use(express.json({ limit: '10kb' }));
 app.use(compression());
+
+// Security: NoSQL Injection Guard
+app.use(mongoSanitize());
+
+// Custom Injection & HPP Guard for Express 5
+const sanitizeObj = (obj) => {
+  for (let key in obj) {
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
+      sanitizeObj(obj[key]);
+    } else if (typeof obj[key] === 'string') {
+      obj[key] = xss(obj[key]);
+    }
+  }
+};
+
+app.use((req, res, next) => {
+  if (req.body) sanitizeObj(req.body);
+  if (req.params) sanitizeObj(req.params);
+  if (req.query) {
+    const keys = Object.keys(req.query);
+    for (let key of keys) {
+      if (Array.isArray(req.query[key])) {
+        req.query[key] = req.query[key][req.query[key].length - 1]; // HPP protection
+      }
+      if (typeof req.query[key] === 'string') {
+        req.query[key] = xss(req.query[key]); // XSS protection
+      }
+    }
+  }
+  next();
+});
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
