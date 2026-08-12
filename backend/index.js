@@ -33,7 +33,6 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const xss = require('xss');
-const mongoSanitize = require('express-mongo-sanitize');
 const crypto = require('crypto');
 const app = express();
 
@@ -133,16 +132,26 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 app.use(compression());
 
-// Security: NoSQL Injection Guard
-app.use(mongoSanitize());
-
-// Custom Injection & HPP Guard for Express 5
+// Custom Injection (NoSQL + XSS) & HPP Guard for Express 5
+// Express 5 makes req.query read-only, so we MUST mutate properties in-place.
 const sanitizeObj = (obj) => {
-  for (let key in obj) {
-    if (typeof obj[key] === 'object' && obj[key] !== null) {
-      sanitizeObj(obj[key]);
-    } else if (typeof obj[key] === 'string') {
-      obj[key] = xss(obj[key]);
+  if (typeof obj !== 'object' || obj === null) return;
+  const keys = Object.keys(obj);
+  for (const key of keys) {
+    let newKey = key;
+    
+    // 1. NoSQL Injection Protection: strip '$' and '.' from object keys
+    if (key.includes('$') || key.includes('.')) {
+      newKey = key.replace(/[\$\.]/g, '');
+      obj[newKey] = obj[key];
+      delete obj[key];
+    }
+    
+    // 2. Recursion for nested objects or strings
+    if (typeof obj[newKey] === 'object' && obj[newKey] !== null) {
+      sanitizeObj(obj[newKey]);
+    } else if (typeof obj[newKey] === 'string') {
+      obj[newKey] = xss(obj[newKey]); // XSS protection
     }
   }
 };
@@ -151,15 +160,15 @@ app.use((req, res, next) => {
   if (req.body) sanitizeObj(req.body);
   if (req.params) sanitizeObj(req.params);
   if (req.query) {
+    // We cannot reassign req.query in Express 5, so we mutate it in-place
     const keys = Object.keys(req.query);
     for (let key of keys) {
+      // HPP protection: take the last array element if query param is duplicated
       if (Array.isArray(req.query[key])) {
-        req.query[key] = req.query[key][req.query[key].length - 1]; // HPP protection
-      }
-      if (typeof req.query[key] === 'string') {
-        req.query[key] = xss(req.query[key]); // XSS protection
+        req.query[key] = req.query[key][req.query[key].length - 1]; 
       }
     }
+    sanitizeObj(req.query);
   }
   next();
 });

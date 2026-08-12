@@ -21,7 +21,6 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.6.1",
     "express-useragent": "^2.2.1",
     "file-type": "^16.5.4",
