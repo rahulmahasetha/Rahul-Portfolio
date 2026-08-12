@@ -33,7 +33,7 @@ const Hero = memo(function Hero() {
             Welcome to my portfolio
           </motion.h2>
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-[4.5rem] font-extrabold mb-4 leading-tight tracking-tight lg:whitespace-nowrap">
+          <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-[4rem] xl:text-[4.5rem] font-extrabold mb-4 leading-tight tracking-tight lg:whitespace-nowrap break-words">
             Hi, I'm <span className="text-primary">Rahul Mahaseth</span>
           </h1>
 
@@ -59,18 +59,18 @@ const Hero = memo(function Hero() {
             />
           </div>
 
-          <p className="text-gray-600 dark:text-gray-400 text-lg md:text-xl max-w-2xl mx-auto md:mx-0 mb-8 leading-relaxed">
+          <p className="text-gray-600 dark:text-gray-400 text-base md:text-xl max-w-2xl mx-auto md:mx-0 mb-8 leading-relaxed">
             I build world-class, responsive, and futuristic web applications.
             Passionate about solving complex problems with elegant code.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 mb-10">
+          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 mb-10 w-full">
             <motion.a
               href={resumeUrl || '#'}
               download
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-8 py-4 bg-primary hover:bg-primary-dark text-white rounded-full font-bold flex items-center gap-2 transition-all shadow-md"
+              className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 bg-primary hover:bg-primary-dark text-white rounded-full font-bold flex items-center justify-center gap-2 transition-all shadow-md"
             >
               <Download size={20} />
               Download Resume
@@ -79,7 +79,7 @@ const Hero = memo(function Hero() {
               href="#contact"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-8 py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-current rounded-full font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-all shadow-sm"
+              className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-current rounded-full font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-all shadow-sm text-center flex items-center justify-center"
             >
               Contact Me
             </motion.a>
@@ -111,7 +111,7 @@ const Hero = memo(function Hero() {
         </motion.div>
 
         <motion.div
-          className="flex-1 w-full max-w-md relative cursor-pointer"
+          className="flex-1 w-full max-w-[16rem] sm:max-w-sm md:max-w-md relative cursor-pointer mx-auto md:mx-0 mt-8 md:mt-0"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.2 }}

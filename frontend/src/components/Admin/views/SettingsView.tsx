@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Save, Palette, Bell, Shield, Database } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { Button } from '../ui/Button';
 
 export function SettingsView() {
@@ -292,7 +293,7 @@ export function SettingsView() {
         </Button>
       </div>
       
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(`
         .toggle-checkbox:checked {
           right: 0;
           border-color: #3b82f6;
@@ -307,7 +308,7 @@ export function SettingsView() {
         .toggle-label {
           transition: all 0.2s ease;
         }
-      `}} />
+      `)}} />
     </div>
   );
 }

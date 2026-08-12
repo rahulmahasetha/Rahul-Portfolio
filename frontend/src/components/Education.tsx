@@ -27,7 +27,7 @@ const Education = memo(function Education({ darkMode }: { darkMode: boolean }) {
           transition={{ duration: 0.6 }}
           className="mb-8 md:mb-10"
         >
-          <h2 className="text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
             Education
           </h2>
         </motion.div>

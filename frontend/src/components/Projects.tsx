@@ -186,7 +186,7 @@ const Projects = memo(function Projects() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h2 className="text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
             Projects
           </h2>
         </motion.div>

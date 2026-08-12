@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Award, Search, Edit3, Trash2, Plus, Image as ImageIcon, X } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { StatsCard } from '../ui/StatsCard';
@@ -169,7 +170,7 @@ export function AchievementsView() {
                   <div className="flex flex-1 flex-col p-5">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="font-bold text-white flex items-center gap-2">
-                        <span dangerouslySetInnerHTML={{ __html: achievement.icon }} className="w-5 h-5 flex items-center justify-center" />
+                        <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(achievement.icon) }} className="w-5 h-5 flex items-center justify-center" />
                         {achievement.title}
                       </h3>
                     </div>

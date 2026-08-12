@@ -33,6 +33,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const xss = require('xss');
+const mongoSanitize = require('express-mongo-sanitize');
 const crypto = require('crypto');
 const app = express();
 
@@ -91,12 +92,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Security: NoSQL Injection Guard
+app.use(mongoSanitize());
+
 // Custom Injection & HPP Guard for Express 5
 const sanitizeObj = (obj) => {
   for (let key in obj) {
-    if (typeof key === 'string' && (key.startsWith('$') || key.includes('.'))) {
-      delete obj[key];
-    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
       sanitizeObj(obj[key]);
     } else if (typeof obj[key] === 'string') {
       obj[key] = xss(obj[key]);
@@ -110,15 +112,11 @@ app.use((req, res, next) => {
   if (req.query) {
     const keys = Object.keys(req.query);
     for (let key of keys) {
-      if (key.startsWith('$') || key.includes('.')) {
-        delete req.query[key];
-      } else {
-        if (Array.isArray(req.query[key])) {
-          req.query[key] = req.query[key][req.query[key].length - 1]; // HPP protection
-        }
-        if (typeof req.query[key] === 'string') {
-          req.query[key] = xss(req.query[key]); // XSS protection
-        }
+      if (Array.isArray(req.query[key])) {
+        req.query[key] = req.query[key][req.query[key].length - 1]; // HPP protection
+      }
+      if (typeof req.query[key] === 'string') {
+        req.query[key] = xss(req.query[key]); // XSS protection
       }
     }
   }
@@ -143,12 +141,15 @@ app.use(cors({
     const cleanOrigin = origin ? origin.replace(/\/$/, '') : '';
     const cleanAllowed = allowedOrigins.map(url => url ? url.replace(/\/$/, '') : '');
     
-    // Allow if matches explicit list OR if it's a vercel.app domain OR the custom domain
+    // Strict regex for vercel.app and custom domain to prevent subdomain takeovers
+    const isVercel = /^https:\/\/.*\.vercel\.app$/.test(cleanOrigin);
+    const isCustomDomain = /^https:\/\/(.*\.)?rahulmahaseth\.com\.np$/.test(cleanOrigin);
+
     if (
       !origin || 
       cleanAllowed.indexOf(cleanOrigin) !== -1 || 
-      (origin && origin.endsWith('.vercel.app')) ||
-      (origin && origin.includes('rahulmahaseth.com.np'))
+      isVercel ||
+      isCustomDomain
     ) {
       callback(null, true);
     } else {
@@ -316,10 +317,19 @@ const AuditLog = require('./models/AuditLog');
 
 app.use(useragent.express());
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback_key';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('WARNING: JWT_SECRET is not defined. Sessions will invalidate on server restart.');
+}
+
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per window
+  message: { error: 'Too many login attempts, please try again after 15 minutes' }
+});
 
 // /api/auth/login
-app.post('/api/auth/login', upload.single('snapshot'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
+app.post('/api/auth/login', loginRateLimiter, upload.single('snapshot'), validateUpload, optimizeUploads, cloudinaryUploadMiddleware, async (req, res) => {
   try {
     const { password } = req.body;
     const ip = getClientIp(req);
@@ -328,9 +338,13 @@ app.post('/api/auth/login', upload.single('snapshot'), validateUpload, optimizeU
     let admin = await Admin.findOne();
     if (!admin) {
       // If no admin exists, create one with default password
-      const hashed = await bcrypt.hash('Raj Mahaseth@123', 10);
-      admin = new Admin({ email: 'admin@example.com', password: hashed });
+      const initialPassword = process.env.INITIAL_ADMIN_PASSWORD || crypto.randomBytes(16).toString('hex');
+      const hashed = await bcrypt.hash(initialPassword, 10);
+      admin = new Admin({ email: process.env.ADMIN_EMAIL || 'admin@example.com', password: hashed });
       await admin.save();
+      if (!process.env.INITIAL_ADMIN_PASSWORD) {
+        console.log(`\n=== ADMIN CREATED. Password: ${initialPassword} ===\n`);
+      }
     }
 
     const logEntry = new SecurityLog({
@@ -745,8 +759,9 @@ app.post('/api/vault/verify', verifyAdmin, async (req, res) => {
     if (!admin) return res.status(401).json({ error: 'Unauthorized' });
 
     if (!admin.vaultPassword) {
-      if (password === '#rahul@mahaseth@123') return res.json({ success: true });
-      return res.status(401).json({ error: 'Incorrect vault password' });
+      const initialVault = process.env.INITIAL_VAULT_PASSWORD;
+      if (initialVault && password === initialVault) return res.json({ success: true });
+      return res.status(401).json({ error: 'Incorrect vault password. Please set INITIAL_VAULT_PASSWORD in env.' });
     }
 
     const match = await bcrypt.compare(password, admin.vaultPassword);
@@ -764,7 +779,8 @@ app.post('/api/vault/change', verifyAdmin, async (req, res) => {
     if (!admin) return res.status(401).json({ error: 'Unauthorized' });
 
     if (!admin.vaultPassword) {
-      if (oldPassword !== '#rahul@mahaseth@123') return res.status(401).json({ error: 'Incorrect old password' });
+      const initialVault = process.env.INITIAL_VAULT_PASSWORD;
+      if (!initialVault || oldPassword !== initialVault) return res.status(401).json({ error: 'Incorrect old password' });
     } else {
       const match = await bcrypt.compare(oldPassword, admin.vaultPassword);
       if (!match) return res.status(401).json({ error: 'Incorrect old password' });

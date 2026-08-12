@@ -5,11 +5,12 @@ const bcrypt = require('bcrypt');
 const Admin = require('./models/Admin');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/portfolio';
-const newPassword = process.argv[2];
-const email = process.argv[3] || process.env.ADMIN_EMAIL || 'admin@example.com';
+const newPassword = process.env.NEW_ADMIN_PASSWORD;
+const email = process.env.ADMIN_EMAIL || 'admin@example.com';
 
 if (!newPassword) {
-  console.error('Usage: node reset_admin_password.js <newPassword> [email]');
+  console.error('Error: Please set NEW_ADMIN_PASSWORD in your environment variables.');
+  console.error('Example: NEW_ADMIN_PASSWORD=your_new_password node reset_admin_password.js');
   process.exit(1);
 }
 

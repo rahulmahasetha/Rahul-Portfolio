@@ -36,7 +36,7 @@ const Achievements = memo(function Achievements() {
           transition={{ duration: 0.6 }}
           className="mb-16"
         >
-          <h6 className="text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
+          <h6 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-primary tracking-tight">
             Honors & Achievements
           </h6>
         </motion.div>

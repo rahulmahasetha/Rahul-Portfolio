@@ -135,7 +135,7 @@ export default function Contact() {
             transition={{ duration: 0.6 }}
             className="md:col-span-3"
           >
-            <div className="glass p-8 md:p-10 rounded-3xl">
+            <div className="glass p-6 md:p-10 rounded-3xl">
               <form onSubmit={handleSubmit} className="space-y-6">
                 {errorMsg && (
                   <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
