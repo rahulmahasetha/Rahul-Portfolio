@@ -12,7 +12,9 @@ const Hero = memo(function Hero() {
   const { data } = usePortfolioData();
   const { openImage } = useImageModal();
   const resume = data?.resume;
-  const resumeUrl = resume?.url ? `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resume.url}` : '#';
+  const resumeUrl = resume?.url 
+    ? (resume.url.startsWith('http') ? resume.url : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resume.url}`) 
+    : '#';
 
   return (
     <section id="home" className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
