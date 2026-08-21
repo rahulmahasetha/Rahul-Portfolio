@@ -37,6 +37,8 @@ export function ImageModal() {
   // Compute the original, high-res download URL
   // e.g., /uploads/image.jpg -> /uploads/image_original.jpg
   const getOriginalUrl = (url: string) => {
+    if (url.includes('cloudinary.com')) return url;
+
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     const isAbsolute = url.startsWith('http');
     const fullUrl = isAbsolute ? url : `${baseUrl}${url}`;

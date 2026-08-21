@@ -27,6 +27,7 @@ const Certificate = memo(function Certificate() {
 
   const getDownloadUrl = (url: string | undefined) => {
     if (!url) return '#';
+    if (url.includes('cloudinary.com')) return url;
     if (url.endsWith('.pdf')) return resolveMediaUrl(url);
     
     const match = url.match(/(\.[\w\d_-]+)$/i);

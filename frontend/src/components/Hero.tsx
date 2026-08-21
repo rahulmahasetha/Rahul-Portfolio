@@ -70,6 +70,8 @@ const Hero = memo(function Hero() {
           <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 mb-10 w-full">
             <motion.a
               href={resumeUrl || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
               download
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
