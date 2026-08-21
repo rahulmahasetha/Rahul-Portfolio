@@ -19,10 +19,12 @@ const uploadToCloudinary = async (localFilePath, folder) => {
   }
 
   try {
-    // We use resource_type: "auto" to handle both images and raw PDFs seamlessly
+    // We use resource_type: "raw" for PDFs to prevent Cloudinary from corrupting them,
+    // and "auto" for images.
+    const isRaw = localFilePath.toLowerCase().endsWith('.pdf');
     const result = await cloudinary.uploader.upload(localFilePath, {
       folder: folder,
-      resource_type: 'auto'
+      resource_type: isRaw ? 'raw' : 'auto'
     });
     
     // Delete local file after successful upload
