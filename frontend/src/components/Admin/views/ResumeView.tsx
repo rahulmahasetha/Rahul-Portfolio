@@ -136,12 +136,8 @@ export function ResumeView() {
           <h2 className="mb-4 text-xl font-bold text-white">Current File</h2>
           {resume ? (
             <div className="flex flex-col items-center p-8 border border-admin-border rounded-xl bg-admin-surface text-center">
-              <div className="w-full h-64 mb-4 overflow-hidden rounded border border-admin-border">
-                <iframe
-                  src={resume.url.endsWith('.pdf') ? `https://docs.google.com/gview?url=${encodeURIComponent(resume.url)}&embedded=true` : resume.url}
-                  className="w-full h-full"
-                  title="Resume Preview"
-                />
+              <div className="w-full h-48 mb-4 flex items-center justify-center rounded border border-admin-border bg-admin-background/50">
+                <FileText className="w-16 h-16 text-admin-primary/50" />
               </div>
               <h3 className="text-lg font-medium text-white break-all mb-2">{resume.originalName}</h3>
               <p className="text-sm text-admin-text-secondary mb-6">
