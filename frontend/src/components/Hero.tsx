@@ -12,9 +12,14 @@ const Hero = memo(function Hero() {
   const { data } = usePortfolioData();
   const { openImage } = useImageModal();
   const resume = data?.resume;
-  const resumeUrl = resume?.url 
-    ? (resume.url.startsWith('http') ? resume.url : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resume.url}`) 
-    : '#';
+  let resumeUrl = '#';
+  if (resume?.url) {
+    resumeUrl = resume.url.startsWith('http') ? resume.url : `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${resume.url}`;
+    // Force Cloudinary to serve the PDF as a downloadable attachment
+    if (resumeUrl.includes('res.cloudinary.com') && resumeUrl.includes('/upload/') && !resumeUrl.includes('fl_attachment')) {
+      resumeUrl = resumeUrl.replace('/upload/', '/upload/fl_attachment/');
+    }
+  }
 
   return (
     <section id="home" className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">

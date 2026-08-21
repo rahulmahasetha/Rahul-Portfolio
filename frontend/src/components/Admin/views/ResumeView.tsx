@@ -64,6 +64,15 @@ export function ResumeView() {
     }
   };
 
+  const handleDownload = () => {
+    if (!resume?.url) return;
+    let downloadUrl = resume.url;
+    if (downloadUrl.includes('res.cloudinary.com') && downloadUrl.includes('/upload/') && !downloadUrl.includes('fl_attachment')) {
+      downloadUrl = downloadUrl.replace('/upload/', '/upload/fl_attachment/');
+    }
+    window.open(downloadUrl, '_blank');
+  };
+
   return (
     <div className="flex flex-col gap-8 pb-10">
       <div className="flex items-center justify-between">
@@ -141,7 +150,7 @@ export function ResumeView() {
               <p className="text-sm text-admin-text-secondary mb-6">
                 Uploaded on {new Date(resume.createdAt).toLocaleDateString()}
               </p>
-              <Button onClick={() => window.open(resume.url, '_blank')} className="gap-2">
+              <Button onClick={handleDownload} className="gap-2">
                 <Download className="h-4 w-4" /> Download Resume
               </Button>
             </div>
