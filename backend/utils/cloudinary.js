@@ -13,18 +13,15 @@ cloudinary.config({
  * @param {string} folder - The Cloudinary folder to organize assets (e.g., 'projects', 'resume')
  * @returns {Promise<object>} - Returns { secure_url, public_id }
  */
-const uploadToCloudinary = async (localFilePath, folder) => {
+const uploadToCloudinary = async (localFilePath, folder, resourceType = 'auto') => {
   if (!localFilePath || !fs.existsSync(localFilePath)) {
     throw new Error('Local file does not exist');
   }
 
   try {
-    // We use resource_type: "raw" for PDFs to prevent Cloudinary from corrupting them,
-    // and "auto" for images.
-    const isRaw = localFilePath.toLowerCase().endsWith('.pdf');
     const result = await cloudinary.uploader.upload(localFilePath, {
       folder: folder,
-      resource_type: isRaw ? 'raw' : 'auto'
+      resource_type: resourceType
     });
     
     // Delete local file after successful upload

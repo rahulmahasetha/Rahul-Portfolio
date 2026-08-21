@@ -64,12 +64,6 @@ export function ResumeView() {
     }
   };
 
-  const handleDownload = () => {
-    if (!resume?.url) return;
-    const downloadUrl = resume.url;
-    window.open(downloadUrl, '_blank');
-  };
-
   return (
     <div className="flex flex-col gap-8 pb-10">
       <div className="flex items-center justify-between">
@@ -142,14 +136,20 @@ export function ResumeView() {
           <h2 className="mb-4 text-xl font-bold text-white">Current File</h2>
           {resume ? (
             <div className="flex flex-col items-center p-8 border border-admin-border rounded-xl bg-admin-surface text-center">
-              <FileIcon className="h-16 w-16 text-admin-primary mb-4" />
+              <div className="w-full h-64 mb-4 overflow-hidden rounded border border-admin-border">
+                <iframe
+                  src={resume.url.endsWith('.pdf') ? `https://docs.google.com/gview?url=${encodeURIComponent(resume.url)}&embedded=true` : resume.url}
+                  className="w-full h-full"
+                  title="Resume Preview"
+                />
+              </div>
               <h3 className="text-lg font-medium text-white break-all mb-2">{resume.originalName}</h3>
               <p className="text-sm text-admin-text-secondary mb-6">
                 Uploaded on {new Date(resume.createdAt).toLocaleDateString()}
               </p>
-              <Button onClick={handleDownload} className="gap-2">
+              <a href={resume.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
                 <Download className="h-4 w-4" /> Download Resume
-              </Button>
+              </a>
             </div>
           ) : (
             <div className="py-12 text-center text-admin-text-secondary border border-dashed border-admin-border rounded-xl">

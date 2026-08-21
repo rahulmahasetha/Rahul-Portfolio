@@ -258,9 +258,14 @@ const cloudinaryUploadMiddleware = async (req, res, next) => {
       else if (req.path.includes('/api/auth/login')) folder = 'security';
       else if (req.path.includes('/api/skills')) folder = 'skills';
       else if (req.path.includes('/api/achievements')) folder = 'achievements';
-      
       if (file.path && fs.existsSync(file.path)) {
-        const result = await uploadToCloudinary(file.path, folder);
+        let resourceType = 'auto';
+        if (file.mimetype === 'application/pdf') {
+          resourceType = 'raw';
+        } else if (file.mimetype && file.mimetype.startsWith('video/')) {
+          resourceType = 'video';
+        }
+        const result = await uploadToCloudinary(file.path, folder, resourceType);
         file.cloudinaryUrl = result.secure_url;
         file.cloudinaryId = result.public_id;
       }
