@@ -36,6 +36,12 @@ const xss = require('xss');
 const crypto = require('crypto');
 const app = express();
 
+// Lightweight health check endpoint for Render / UptimeRobot
+// Placed before all middlewares to ensure it responds as fast as possible.
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Trust one hop of reverse proxy (nginx, Cloudflare, etc.) so req.ip is populated correctly
 app.set('trust proxy', 1);
 
@@ -1737,6 +1743,23 @@ app.use((err, req, res, next) => {
 
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Startup error handling
+server.on('error', (err) => {
+  console.error('Server failed to start:', err);
+  process.exit(1);
+});
+
+// Process-level error handling
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
