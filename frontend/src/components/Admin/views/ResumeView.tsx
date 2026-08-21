@@ -66,10 +66,7 @@ export function ResumeView() {
 
   const handleDownload = () => {
     if (!resume?.url) return;
-    let downloadUrl = resume.url;
-    if (downloadUrl.includes('res.cloudinary.com') && downloadUrl.includes('/upload/') && !downloadUrl.includes('fl_attachment')) {
-      downloadUrl = downloadUrl.replace('/upload/', '/upload/fl_attachment/');
-    }
+    const downloadUrl = resume.url;
     window.open(downloadUrl, '_blank');
   };
 
