@@ -260,9 +260,7 @@ const cloudinaryUploadMiddleware = async (req, res, next) => {
       else if (req.path.includes('/api/achievements')) folder = 'achievements';
       if (file.path && fs.existsSync(file.path)) {
         let resourceType = 'auto';
-        if (file.mimetype === 'application/pdf') {
-          resourceType = 'raw';
-        } else if (file.mimetype && file.mimetype.startsWith('video/')) {
+        if (file.mimetype && file.mimetype.startsWith('video/')) {
           resourceType = 'video';
         }
         const result = await uploadToCloudinary(file.path, folder, resourceType);
@@ -1630,13 +1628,30 @@ app.post('/api/resume', upload.single('resume'), validateUpload, optimizeUploads
     const oldResume = await Resume.findOne();
     if (oldResume) {
       await Resume.findByIdAndDelete(oldResume._id);
-      // optionally delete the old file from fs here
+      
+      // Delete old resume from Cloudinary
+      const { deleteFromCloudinary } = require('./utils/cloudinary');
+      if (oldResume.publicId) {
+        await deleteFromCloudinary(oldResume.publicId, 'image');
+        await deleteFromCloudinary(oldResume.publicId, 'raw'); // Fallback if it was raw
+      } else if (oldResume.url) {
+        // Fallback for old resumes without publicId
+        const urlParts = oldResume.url.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        const folderIndex = urlParts.indexOf('resume');
+        if (folderIndex !== -1) {
+          const publicId = urlParts.slice(folderIndex).join('/').split('.')[0];
+          await deleteFromCloudinary(publicId, 'image');
+          await deleteFromCloudinary(urlParts.slice(folderIndex).join('/'), 'raw');
+        }
+      }
     }
 
     const newResume = new Resume({
       filename: req.file.filename,
       originalName: req.file.originalname,
-      url: req.file.cloudinaryUrl
+      url: req.file.cloudinaryUrl,
+      publicId: req.file.cloudinaryId
     });
 
     await newResume.save();
